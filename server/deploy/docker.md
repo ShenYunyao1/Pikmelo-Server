@@ -1,6 +1,6 @@
 # Pikmelo Server Docker 使用与升级
 
-适用 `codex/docker-compose` 分支、Linux amd64 容器、Docker Engine 与 Compose v2。运行实例通过 Docker 命令管理升级，网页“服务器更新”显示容器托管说明。
+适用 `main` 的 Docker 运行方式、Linux amd64 容器、Docker Engine 与 Compose v2。2026-11-15 起 Docker 实现合并至本地主分支，原分支保留历史。运行实例通过 Docker 命令管理升级，网页“服务器更新”显示容器托管说明。
 
 ## 首次启动
 
@@ -51,6 +51,8 @@ docker compose up -d --no-build --wait --wait-timeout 120 pikmelo
 需要局域网访问时，按环境配置 `PIKMELO_BIND_ADDRESS`。HTTPS 反向代理接入时填写 `PIKMELO_PUBLIC_URL` 并沿用对应认证及来源校验配置。
 
 ## 通过 Docker 命令受控升级
+
+新容器启动后由服务端执行已支持的数据库迁移，当前已验证 schema 8→9 的账户、Key、歌单及媒体保留。后续 schema 变化继续以发行说明与迁移测试声明的支持范围为准。升级前先停止旧实例并备份持久卷，跨 schema 回退时使用原镜像与升级前快照。
 
 以下示例采用默认卷名。自定义卷名时相应替换命令参数，`OLD_IMAGE_ID` 表示第一条命令查到的原镜像 ID。
 
