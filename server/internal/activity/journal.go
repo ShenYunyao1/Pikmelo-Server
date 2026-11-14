@@ -53,7 +53,11 @@ type Page struct {
 type eventInfo struct{ category, level, message string }
 
 var events = map[string]eventInfo{
-	"mail.queued": {"mail", "info", "验证邮件已排队"}, "mail.submitted": {"mail", "info", "邮件已提交投递服务"}, "mail.failed": {"mail", "warn", "邮件投递失败"},
+	"online.download.started":   {"online", "info", "在线下载任务开始"},
+	"online.download.failed":    {"online", "error", "在线下载任务失败或中断"},
+	"online.download.completed": {"online", "info", "在线曲目已入库"},
+	"online.assets.partial":     {"online", "warn", "在线曲目的部分可选附件不可用"},
+	"mail.queued":               {"mail", "info", "验证邮件已排队"}, "mail.submitted": {"mail", "info", "邮件已提交投递服务"}, "mail.failed": {"mail", "warn", "邮件投递失败"},
 	"mail.verified": {"mail", "info", "账户邮箱验证完成"}, "mail.tested": {"mail", "info", "测试邮件已提交投递服务"},
 	"mail.cleanup_failed": {"mail", "warn", "旧邮件凭据清理失败，后台将重试"},
 	"server.start":        {"server", "info", "服务器启动"}, "server.stop": {"server", "info", "服务器停止"},

@@ -1,6 +1,7 @@
 'use strict';
 
 const pageRoutes = {listening:'listening',account:'account/profile',tracks:'library', public:'public/playlists', playlists:'playlists', upload:'uploads', keys:'player/keys', stats:'player/stats', overview:'admin/overview', users:'admin/users', maintenance:'admin/library/scan', logs:'admin/logs',settings:'admin/settings/general'};
+pageRoutes.online='online/search';titles.online='在线搜索';setupOnlineSearchPage();
 titles.account='个人中心';
 const adminPages = new Set(['overview', 'users', 'maintenance', 'settings','logs']);
 Object.assign(titles, {overview:'管理概览', tracks:'全局曲库', playlists:'我的歌单', upload:'上传任务', keys:'播放器接入', stats:'播放器接入', users:'用户管理', settings:'系统设置', maintenance:'曲库维护'});
@@ -20,6 +21,7 @@ function routeLink(label, path) {
 const nav = document.querySelector('.nav');
 nav.setAttribute('aria-label','主导航');
 const navIcons={
+  online:'<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M8 10h4M10 8v4"/>',
   listening:'<path d="M4 18v-5m5 5V7m5 11V3m5 15v-8"/>',
   logs:'<path d="M5 3h14v18H5zM8 7h8M8 12h8M8 17h5"/>',
   public:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18"/>',
@@ -44,7 +46,8 @@ trackDetails.addEventListener('close',()=>{$('trackDetailsBody').replaceChildren
 const clearCompleted=makeButton('清理已完成',()=>run(async()=>{for(const upload of [...state.uploads].filter(x=>['完成','已去重'].includes(x.status)))await removeUpload(upload)}));
 clearCompleted.id='clearCompleted';$('page-upload').querySelector('.queue-actions').prepend(clearCompleted);
 window.addEventListener('beforeunload',event=>{if(state.user&&state.uploads.some(x=>!['完成','已去重'].includes(x.status))){event.preventDefault();event.returnValue=''}});
-const groups = [['音乐', ['tracks','listening','public','playlists','upload']], ['播放器',['keys']], ['管理',['overview','users','maintenance','logs','settings']]];
+const groups = [['音乐', ['tracks','online','listening','public','playlists','upload']], ['播放器',['keys']], ['管理',['overview','users','maintenance','logs','settings']]];
+const onlineNav=makeButton('',()=>showPage('online'),'');onlineNav.dataset.page='online';onlineNav.innerHTML='<span class="nav-icon"></span><span class="nav-label">在线搜索</span>';nav.append(onlineNav);
 const logsNav=makeButton('',()=>showPage('logs'),'');logsNav.dataset.page='logs';logsNav.innerHTML='<span class="nav-icon">▤</span><span class="nav-label">系统日志</span>';nav.append(logsNav);
 const maintenanceNav = makeButton('', () => showPage('maintenance'));
 maintenanceNav.dataset.page = 'maintenance';
@@ -141,6 +144,7 @@ function navigatePage(page) {
   if(location.hash===hash) restoreWorkspaceRoute(); else location.hash=hash;
 }
 function displayWorkspacePage(page) {
+  if(typeof onlinePageChanged==='function')onlinePageChanged();
   hideContextMenu(); closeMobileNav(); routeError.hidden=true;
   state.page=page;
   if(page!=='tracks')state.selectedTrackIds.clear();
@@ -218,6 +222,7 @@ async function restoreWorkspaceRoute() {
       document.querySelectorAll('[data-filter]').forEach(el=>el.classList.toggle('active',el.dataset.filter===state.trackFilter));await loadBrowseView();if(generation!==routeGeneration)return;renderTracks();
     }
     if(page==='listening')await loadListeningPage();
+    if(page==='online')await loadOnlineSearchPage();
     if(page==='upload')renderUploads();
     if(page==='keys'){await loadBrowseGrantPlaylists();if(generation!==routeGeneration)return;await loadKeys()}
     if(page==='logs')await loadSystemLogs();

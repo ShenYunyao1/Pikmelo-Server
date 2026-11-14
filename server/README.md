@@ -8,6 +8,8 @@
 
 ## 通用功能与原生运行参考
 
+本地开发新增“在线搜索”，管理员可在该页“音源管理”导入单个 LX JavaScript 链接，成员可搜索已启用平台并下载入库，选择本人歌单。Docker Compose 增加隔离音源 worker，主服务与 worker 配套构建和更新，详见 [Docker 使用说明](deploy/docker.md#在线搜索与音源-worker)。实际第三方音源兼容性待提供链接后验证，当前开发内容尚未发布。
+
 Go 1.26+，本版 SQLite schema 9，HTTP API `/api/v2`，内置中文管理页。支持 Windows 和 Linux。正式版本以 Release 验收为依据。
 
 项目重命名的范围、升级兼容及验收进度见 [重命名计划](../Docs/服务器/Pikmelo服务器重命名计划与进度.md)。

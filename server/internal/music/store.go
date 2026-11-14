@@ -38,6 +38,7 @@ var errVersionConflict = errors.New("record changed; refresh before editing")
 var errTrackInUse = errors.New("this track is used by another account's playlist; contact an administrator")
 
 type Store struct {
+	online            *onlineService
 	resumeVerifyMu    sync.Mutex
 	resumeVerifyNext  map[string]time.Time
 	tempMu            sync.Mutex
@@ -145,6 +146,11 @@ func openStoreForSchema(dataPath, mediaRoot string, schema int, runtimeInitializ
 		return nil, err
 	}
 	if err := store.InitMail(); err != nil {
+		_ = store.closeDatabases()
+		return nil, err
+	}
+	if err := store.initializeOnline(); err != nil {
+		store.CloseMail()
 		_ = store.closeDatabases()
 		return nil, err
 	}

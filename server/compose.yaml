@@ -20,6 +20,14 @@ services:
       - "${PIKMELO_BIND_ADDRESS:-127.0.0.1}:${PIKMELO_PORT:-8080}:8080"
     environment:
       MUSIC_SERVER_PUBLIC_URL: ${PIKMELO_PUBLIC_URL:-}
+      PIKMELO_ONLINE_WORKER_URL: http://online-worker:3000
+      PIKMELO_ONLINE_BROKER_URL: http://pikmelo:8080/api/v2/online/broker
+    depends_on:
+      online-worker:
+        condition: service_healthy
+    networks:
+      - default
+      - online
     volumes:
       - data:/data
       - temporary:/tmp
@@ -35,6 +43,36 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  online-worker:
+    image: ${PIKMELO_WORKER_IMAGE:-ghcr.io/shenyunyao1/pikmelo-server-online-worker:latest}
+    build:
+      context: ./online-worker
+      args:
+        VCS_REF: ${PIKMELO_BUILD_COMMIT:-unknown}
+        IMAGE_VERSION: ${PIKMELO_BUILD_VERSION:-local}
+    networks:
+      - online
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    cpus: 1
+    pids_limit: 64
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  online:
+    internal: true
 
 volumes:
   data:

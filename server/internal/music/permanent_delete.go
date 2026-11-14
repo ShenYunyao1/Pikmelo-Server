@@ -271,6 +271,12 @@ func (s *Store) PurgeUser(id string, options MutationOptions) error {
 		if _, err := tx.Exec("DELETE FROM meta WHERE key LIKE 'upload_receipt/%' AND CASE WHEN json_valid(value) THEN json_extract(value,'$.owner') END=?", id); err != nil {
 			return err
 		}
+		if _, err := tx.Exec("DELETE FROM meta WHERE key LIKE 'online/stage/%' AND value IN (SELECT substr(key,12) FROM meta WHERE key LIKE 'online/job/%' AND json_extract(value,'$.owner')=?)", id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec("DELETE FROM meta WHERE key LIKE 'online/job/%' AND json_extract(value,'$.owner')=?", id); err != nil {
+			return err
+		}
 		// Preserve shared contributions while releasing their author foreign keys.
 		for _, table := range []string{"track_tags", "track_tag_overrides"} {
 			var exists bool

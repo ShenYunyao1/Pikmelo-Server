@@ -7,10 +7,10 @@ import (
 	"github.com/google/uuid"
 	"log"
 	_ "modernc.org/sqlite"
-	"pikmelo-server/internal/version"
 	"net/url"
 	"os"
 	"path/filepath"
+	"pikmelo-server/internal/version"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +60,9 @@ type sqlReader interface {
 
 func (s *Store) DataPath() string { return s.dataPath }
 func (s *Store) Close() error {
+	if s.online != nil {
+		s.online.close()
+	}
 	s.scanMu.Lock()
 	s.closed = true
 	if s.scanCancel != nil {

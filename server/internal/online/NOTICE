@@ -1,0 +1,15 @@
+Pikmelo Server online platform compatibility
+
+The platform request formats, signing constants, metadata mapping and lyric
+formats in search.go and assets.go are adapted to Go from LX Music Desktop.
+
+Upstream project: LX Music Desktop
+Authors: lyswhut and contributors
+Source: https://github.com/lyswhut/lx-music-desktop
+Reference commit: 323e4bac505da428adae8db6b58039fb2b36b86d
+Reference paths: src/renderer/utils/musicSdk and src/renderer/store/search/music
+License: Apache License 2.0, reproduced in LICENSE-LX-Music.txt.
+
+Pikmelo modifications include server-side public-network enforcement, bounded
+HTTP requests, Go platform normalization, partial search results, constrained
+JavaScript-worker integration, user quotas and transactional library import.

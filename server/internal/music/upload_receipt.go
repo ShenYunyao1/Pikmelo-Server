@@ -23,7 +23,10 @@ func recordUploadReceipt(tx *sql.Tx, id, owner, trackID string, duplicate bool) 
 		return err
 	}
 	_, err = tx.Exec("INSERT INTO meta(key,value) VALUES(?,?)", uploadReceiptPrefix+id, string(raw))
-	return err
+	if err != nil {
+		return err
+	}
+	return finalizeOnlineUpload(tx, id, owner, trackID)
 }
 
 // Receipts acknowledge an already completed transaction. They intentionally

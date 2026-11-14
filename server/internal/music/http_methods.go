@@ -21,6 +21,7 @@ func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
 // exactRouteMethods is shared and immutable: routeMethods runs on every request
 // (trailing-slash normalization and the final method gate).
 var exactRouteMethods = map[string]string{
+	"online/sources": "GET, POST", "online/search": "GET", "online/jobs": "GET, POST", "online/broker": "POST",
 	"setup": "GET, POST", "health": "GET", "tracks": "GET", "playlists": "GET, POST", "playlists/editor": "POST", "playlists/order": "PUT",
 	"auth/keys": "GET, POST, DELETE", "auth/keys/stats": "GET", "auth/avatar": "GET, PUT", "auth/avatar/content": "GET", "auth/profile": "PUT", "auth/storage": "GET", "auth/email": "GET", "auth/email/challenge": "POST", "auth/email/verify": "POST",
 	"admin/settings": "GET, PUT, PATCH", "admin/users": "GET, POST", "admin/mail": "GET, PUT", "admin/mail/test": "POST", "admin/registration": "GET, PUT",
@@ -53,6 +54,10 @@ func routeMethods(path string) string {
 	a := strings.Split(p, "/")
 	valid := func(i int) bool { return i < len(a) && validID.MatchString(a[i]) }
 	switch {
+	case len(a) == 3 && a[0] == "online" && a[1] == "sources" && tagUUID(a[2]):
+		return "PATCH, DELETE"
+	case len(a) == 4 && a[0] == "online" && a[1] == "jobs" && tagUUID(a[2]) && (a[3] == "cancel" || a[3] == "retry"):
+		return "POST"
 	case len(a) == 2 && a[0] == "tag-groups" && tagGroupID(a[1]):
 		return "PATCH, DELETE"
 	case len(a) == 2 && (a[0] == "tags" || a[0] == "saved-track-filters") && tagUUID(a[1]):

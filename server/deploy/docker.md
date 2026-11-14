@@ -16,6 +16,7 @@ ghcr.io/shenyunyao1/pikmelo-server@sha256:4a3807a4c64162c0774619c7ce3feb2a360f57
 
 ```sh
 docker compose pull pikmelo
+docker compose pull online-worker
 docker compose up -d --no-build --wait --wait-timeout 120 pikmelo
 docker compose logs --tail 50 pikmelo
 docker compose exec -T pikmelo cat /data/data/setup-token
@@ -27,6 +28,7 @@ docker compose exec -T pikmelo cat /data/data/setup-token
 
 ```sh
 docker compose build pikmelo
+docker compose build online-worker
 docker compose up -d --no-build --wait --wait-timeout 120 pikmelo
 ```
 
@@ -37,6 +39,7 @@ docker compose up -d --no-build --wait --wait-timeout 120 pikmelo
 | 配置项 | 默认值 | 用途 |
 | --- | --- | --- |
 | PIKMELO_IMAGE | ghcr.io/shenyunyao1/pikmelo-server:latest | 稳定通道，亦可填写具体版本或 `@sha256` 摘要 |
+| PIKMELO_WORKER_IMAGE | ghcr.io/shenyunyao1/pikmelo-server-online-worker:latest | 配套音源 worker，与主镜像选择同一发行版本 |
 | PIKMELO_DATA_VOLUME | pikmelo-data | 业务数据卷，每个实例使用独立名称 |
 | PIKMELO_BIND_ADDRESS | 127.0.0.1 | 宿主机监听地址 |
 | PIKMELO_PORT | 8080 | 宿主机端口，容器内部固定 8080 |
@@ -72,10 +75,11 @@ docker run --rm --network none --mount type=volume,src=pikmelo-backups,dst=/back
 
 ### 2. 拉取并重建
 
-将 `.env` 中的 `PIKMELO_IMAGE` 选择为目标正式版本或镜像摘要。使用 `latest` 时保持稳定通道配置。
+将 `.env` 中的 `PIKMELO_IMAGE` 和 `PIKMELO_WORKER_IMAGE` 选择为同一目标发行的版本或对应镜像摘要。使用 `latest` 时保持稳定通道配置。
 
 ```sh
 docker compose pull pikmelo
+docker compose pull online-worker
 docker compose up -d --no-build --wait --wait-timeout 120 pikmelo
 docker compose ps
 docker compose logs --tail 100 pikmelo
@@ -117,6 +121,31 @@ docker run --rm --network none --mount type=volume,src=pikmelo-import-data,dst=/
 
 ## 构建与发行验证
 
+### 在线搜索与音源 worker
+
+当前开发版增加 `online-worker` 服务。该 worker 镜像随下一次正式发行发布，v0.21.19 的历史发行保持原样。本地源码验证先执行 `docker compose build pikmelo online-worker`，再启动 Compose。正式更新从对应源码取得新版 Compose 及配置模板，配套拉取两个镜像。
+
+worker 仅连接 `internal` Docker 网络，不发布宿主端口、不挂载数据库或媒体。主服务连接该内部网络及普通出站网络，脚本通过短期授权 broker 访问公网 HTTP(S)，逐次检查 DNS、重定向及流量预算。主服务继续负责下载、配额、校验及入库。
+
+网页在“在线搜索”提供搜索、下载任务及管理员音源管理。管理员导入一个指向 UTF-8 `.js` 的链接，最大 512 KiB，通过初始化测试后启用。最多保存八个音源，普通用户可使用已启用音源，源地址和脚本对普通用户隐藏。此期脚本保存在 SQLite 的独立 `meta` 命名空间中，随数据库备份保留，schema 保持 9，现有曲库数据无需重导。
+
+下载沿用账户上传权限、邮箱策略和音频／附件额度，同时受临时预算保护。无 Content-Length 的响应先预留不超过 64 MiB 的上限并显示已下载字节，结束后按实际大小校验。重启后未完成任务标记为可重试，保留有效续传检查点；用户点击重试后重新验证会话和权限，强 ETag 与 Content-Range 一致时继续，否则重新下载。取消、损坏及过期预览重试会重建检查点。
+
+兼容范围为标准 LX `musicUrl`、定时器、网络回调及有限的 Buffer／加密／压缩工具。multipart 和依赖浏览器 DOM、动态代码生成等特殊环境的脚本需要后续适配。搜索适配 `kw/kg/tx/wy/mg`，当前普通歌词支持酷我／网易、具有 LRC 的咪咕／酷狗；加密 QRC／KRC 等暂不解码。可选附件失败记录日志，音频可独立入库。真实音源兼容性和平台服务可用性另行验证。
+
+原生直接启动时可通过 `PIKMELO_ONLINE_WORKER_URL` 指向隔离 worker，并设置 `PIKMELO_ONLINE_BROKER_URL` 为该 worker 能访问的主服务 broker 地址。未配置 worker 时页面提示不可用，既有曲库功能继续运行。Compose 已配置这两个地址，修改网络或服务名时需保持可达。
+
+专项验证命令如下。
+
+```sh
+node --test online-worker/runner.test.mjs
+go test ./internal/online -count=1
+MUSIC_SERVER_LIVE_ONLINE_WORKER=1 go test ./internal/music -run '^TestOnline' -count=1
+node tests/online-search-ui.cjs
+```
+
+浏览器专项沿用测试目录的 Playwright。平台适配来源及许可位于 `internal/online/NOTICE` 和 `LICENSE-LX-Music.txt`，容器同时包含这两份文件。
+
 本分支的服务端 CI 验证 Go／vet、网页、镜像及实际容器升级回退，版本标签与源码版本一致时发布 GHCR 版本镜像、稳定通道和 GitHub Release。Release 的 `container-release.json` 记录版本、schema、源码提交及镜像摘要，流水线同时生成镜像来源证明。
 
 Docker 镜像的 `latest` 为独立稳定通道。Docker 专用 GitHub Release 使用 `--latest=false`，原生安装的更新器通过原生稳定 Release 获取其签名平台资产。仓库版本标签是全局唯一的，后续发行使用新的源码版本和标签。
@@ -125,8 +154,9 @@ Docker 镜像的 `latest` 为独立稳定通道。Docker 专用 GitHub Release �
 
 ```sh
 docker build -t pikmelo-server:test .
+docker build -t pikmelo-online-worker:test online-worker
 GOOS=linux CGO_ENABLED=0 python tests/build-schema-preview.py --version 0.21.18
-python tests/docker-smoke.py --image pikmelo-server:test --schema8-binary build/schema-preview/musicserver --browser-test
+python tests/docker-smoke.py --image pikmelo-server:test --worker-image pikmelo-online-worker:test --schema8-binary build/schema-preview/musicserver --browser-test
 ```
 
 浏览器回归使用 `tests/package-lock.json` 中的 Playwright。Docker Desktop 的 CLI 目录需要在当前进程 PATH 中，构建遇到失效加速器时，可通过 `GO_IMAGE` 和 `RUNTIME_IMAGE` 构建参数选择对应的官方 Registry 地址，并按环境为当前构建进程配置代理。

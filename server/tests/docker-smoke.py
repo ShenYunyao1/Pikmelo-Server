@@ -94,7 +94,8 @@ def main(args):
     data, backup, restored = [project + suffix for suffix in ('-data', '-backup', '-restored')]
     imported = project + '-imported'
     volumes = [data, data + '-tmp', backup, restored, restored + '-tmp', imported, imported + '-tmp']
-    environment = dict(os.environ, PIKMELO_IMAGE=args.image, PIKMELO_DATA_VOLUME=data, PIKMELO_PORT='0')
+    environment = dict(os.environ, PIKMELO_IMAGE=args.image, PIKMELO_WORKER_IMAGE=args.worker_image,
+                       PIKMELO_DATA_VOLUME=data, PIKMELO_PORT='0')
     fixture_image = 'pikmelo-server:fixture-' + uuid.uuid4().hex[:12]
     baseline = args.image
     directory = Path(tempfile.mkdtemp(prefix='docker-', dir=SOURCE / 'build'))
@@ -176,6 +177,13 @@ def main(args):
         helper('tar', '-C', '/source', '-cpf', '/backup/pre-upgrade.tar', '.', mounts=[
             f'type=volume,src={data},dst=/source,readonly', f'type=volume,src={backup},dst=/backup'])
         base, health, _ = start(args.image, 9)
+        current_client = account(base)
+        current_client.login('admin', password)
+        assert current_client.call('online/sources')['worker_available'], 'Isolated source worker unavailable'
+        worker_check = compose('exec', '-T', 'online-worker', 'node', '-e',
+            "fetch('http://127.0.0.1:3000/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'init',script:\"lx.send(lx.EVENT_NAMES.inited,{sources:{kw:{type:'music',actions:['musicUrl'],qualitys:['128k']}}})\"})}).then(async r=>{const d=await r.json();if(!r.ok||!d.sources.kw)process.exit(1)}).catch(()=>process.exit(1))")
+        assert worker_check.returncode == 0
+        print('PASS isolated source worker health and actual LX initialization')
         if args.commit:
             assert health['commit'] == args.commit and health['modified'] is False
         verify(base, 9, track, playlist, key, content)
@@ -227,6 +235,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--docker', default=shutil.which('docker'))
     parser.add_argument('--image', required=True)
+    parser.add_argument('--worker-image', default='pikmelo-online-worker:test')
     parser.add_argument('--schema8-binary', type=Path)
     parser.add_argument('--commit')
     parser.add_argument('--browser-test', action='store_true')

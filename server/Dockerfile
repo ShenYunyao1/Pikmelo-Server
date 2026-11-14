@@ -22,6 +22,7 @@ RUN apt-get update \
     && mkdir -p /data \
     && chown 10001:10001 /data
 COPY --from=build /out/pikmelo-server /usr/local/bin/pikmelo-server
+COPY internal/online/LICENSE-LX-Music.txt internal/online/NOTICE /usr/share/doc/pikmelo-server/
 ARG VCS_REF=unknown
 ARG IMAGE_VERSION=local
 LABEL org.opencontainers.image.title="Pikmelo Server" \

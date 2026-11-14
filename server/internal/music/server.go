@@ -43,6 +43,7 @@ var usersPageScript []byte
 //go:embed library-pagination.js library-pagination.css
 //go:embed online-player.js online-player.css lyrics-parser.js online-volume.js
 //go:embed listening-ui.js listening-ui.css listening-reporter.js
+//go:embed online-search.js online-search.css
 var workspaceAssets embed.FS
 
 type API struct {
@@ -220,6 +221,8 @@ func (a *API) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		assets["/assets/online-volume.js"] = "text/javascript; charset=utf-8"
 		assets["/assets/listening-ui.js"] = "text/javascript; charset=utf-8"
 		assets["/assets/listening-ui.css"] = "text/css; charset=utf-8"
+		assets["/assets/online-search.js"] = "text/javascript; charset=utf-8"
+		assets["/assets/online-search.css"] = "text/css; charset=utf-8"
 		assets["/assets/listening-reporter.js"] = "text/javascript; charset=utf-8"
 		assets["/assets/online-player.css"] = "text/css; charset=utf-8"
 		assets["/assets/lyrics-parser.js"] = "text/javascript; charset=utf-8"
@@ -276,6 +279,14 @@ func (a *API) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		request.Body = http.MaxBytesReader(response, request.Body, 2<<20)
 	}
 	var auth authContext
+	if request.URL.Path == "/api/v2/online/broker" {
+		if a.store.online == nil {
+			writeError(response, 503, "ONLINE_UNAVAILABLE", "online module unavailable")
+			return
+		}
+		a.store.online.broker.ServeHTTP(response, request)
+		return
+	}
 	if request.URL.Path == "/api/v2/setup" {
 		a.webSetup(response, request)
 		return
@@ -340,6 +351,9 @@ func (a *API) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 			return
 		}
 		methodNotAllowed(response, request)
+		return
+	}
+	if a.onlineHTTP(response, request) {
 		return
 	}
 	if request.URL.Path == "/api/v2/admin/registration" {

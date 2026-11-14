@@ -1,0 +1,22 @@
+.online-search-controls{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.online-search-controls .field{margin:0;min-width:110px}
+.online-search-controls .field:first-child{flex:1;min-width:180px}
+.online-search-controls input,.online-search-controls select,.online-dialog input,.online-dialog select{width:100%;box-sizing:border-box}
+.online-platform-status{font-size:13px;color:var(--muted);margin-bottom:12px;overflow-wrap:anywhere}
+.online-result{display:grid;grid-template-columns:44px minmax(0,1fr) auto 45px auto;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.online-result-info{display:flex;flex-direction:column;gap:5px;min-width:0;overflow-wrap:anywhere}
+.online-result-info .track-title{text-align:left;white-space:normal}
+.online-cover{display:grid;place-items:center;width:44px;height:44px;border-radius:8px;background:var(--soft);font-size:22px;color:var(--muted)}
+.online-pager{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:12px;margin:18px 0 4px}
+.online-dialog{width:min(540px,calc(100vw - 32px));max-height:calc(100dvh - 32px);box-sizing:border-box;overflow:auto;border:1px solid var(--line);border-radius:16px;padding:24px;background:var(--paper,#fff);color:var(--ink)}
+.online-dialog::backdrop{background:rgb(10 20 35 / 40%)}
+.online-dialog h2{font-size:20px;margin:0 0 18px}
+.online-dialog-body{display:flex;flex-direction:column;gap:14px}
+.online-dialog>.actions{margin-top:22px;justify-content:flex-end}
+.online-dialog .field{display:flex;flex-direction:column;gap:7px;margin:0}
+.online-dialog .status{overflow-wrap:anywhere}
+.online-job,.online-source{display:flex;align-items:center;gap:16px;justify-content:space-between;padding:16px 0;border-bottom:1px solid var(--line)}
+.online-job>.online-result-info,.online-source>.online-result-info{flex:1}
+.online-job progress{display:block;width:100%;max-width:420px;height:8px;accent-color:var(--blue,#3778df)}
+.online-job .actions,.online-source .actions{flex-shrink:0;flex-wrap:wrap}
+@media(max-width:600px){.online-result{grid-template-columns:38px minmax(0,1fr) auto;gap:8px}.online-result>.badge{grid-column:2;justify-self:start}.online-result>.status{grid-column:3;grid-row:2}.online-result>.btn{grid-column:3;grid-row:1}.online-cover{width:38px;height:38px}.online-job,.online-source{align-items:flex-start;flex-direction:column;gap:10px}.online-job>.online-result-info,.online-source>.online-result-info{width:100%}.online-search-controls{gap:10px}.online-search-controls .field:first-child{flex-basis:100%}.online-dialog{padding:18px}}

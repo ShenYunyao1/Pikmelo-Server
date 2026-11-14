@@ -197,6 +197,9 @@ jobs:
           elif [ "$SUITE" = browse ]; then
             node tests/library-pagination-contract.cjs
             node tests/browse-ui.cjs
+            node tests/online-search-ui.cjs
+            node --test online-worker/runner.test.mjs
+            MUSIC_SERVER_LIVE_ONLINE_WORKER=1 go test ./internal/music -run '^TestOnlineLiveWorker$' -count=1 -timeout 60s
           elif [ "$SUITE" = email ]; then
             CGO_ENABLED=0 go test -c -o build/email-browser-fixture ./internal/music
             MUSIC_SERVER_TEST_EMAIL_BINARY="$PWD/build/email-browser-fixture" node tests/registration-email-ui.cjs
@@ -292,12 +295,15 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$VERSION" ]]; then echo 'Tag differs from code version'; exit 1; fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "WORKER_IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}-online-worker" >> "$GITHUB_ENV"
           docker compose config --quiet
           docker build --build-arg VCS_REF="$GITHUB_SHA" --build-arg VCS_MODIFIED=false --build-arg IMAGE_VERSION="$VERSION" -t pikmelo-server:ci .
+          docker build --build-arg VCS_REF="$GITHUB_SHA" --build-arg IMAGE_VERSION="$VERSION" -t pikmelo-online-worker:ci online-worker
       - name: Real schema upgrade and rollback acceptance
         run: |
+          python tests/docker-worker-boundary.py --worker-image pikmelo-online-worker:ci
           GOOS=linux CGO_ENABLED=0 python tests/build-schema-preview.py --version 0.21.18
-          python tests/docker-smoke.py --image pikmelo-server:ci --schema8-binary build/schema-preview/musicserver --commit "$GITHUB_SHA" --browser-test
+          python tests/docker-smoke.py --image pikmelo-server:ci --worker-image pikmelo-online-worker:ci --schema8-binary build/schema-preview/musicserver --commit "$GITHUB_SHA" --browser-test
       - name: Validate formal release notes
         if: startsWith(github.ref, 'refs/tags/v')
         run: go test ./cmd/release -run '^TestCurrentReleaseNotesMatchProductIdentity$' -count=1
@@ -325,10 +331,16 @@ jobs:
           PY
           docker tag pikmelo-server:ci "$IMAGE_NAME:$VERSION"
           docker push "$IMAGE_NAME:$VERSION"
+          docker tag pikmelo-online-worker:ci "$WORKER_IMAGE_NAME:$VERSION"
+          docker push "$WORKER_IMAGE_NAME:$VERSION"
           DIGEST=$(docker image inspect "$IMAGE_NAME:$VERSION" --format '{{index .RepoDigests 0}}')
           test "${DIGEST%@*}" = "$IMAGE_NAME"
           echo "IMAGE_DIGEST=$DIGEST" >> "$GITHUB_ENV"
           echo "digest=${DIGEST#*@}" >> "$GITHUB_OUTPUT"
+          WORKER_DIGEST=$(docker image inspect "$WORKER_IMAGE_NAME:$VERSION" --format '{{index .RepoDigests 0}}')
+          test "${WORKER_DIGEST%@*}" = "$WORKER_IMAGE_NAME"
+          echo "WORKER_IMAGE_DIGEST=$WORKER_DIGEST" >> "$GITHUB_ENV"
+          echo "worker_digest=${WORKER_DIGEST#*@}" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Attest tested image provenance
@@ -337,6 +349,13 @@ jobs:
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - name: Attest isolated worker provenance
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.WORKER_IMAGE_NAME }}
+          subject-digest: ${{ steps.image.outputs.worker_digest }}
           push-to-registry: true
       - name: Publish Docker release identity
         if: startsWith(github.ref, 'refs/tags/v')
@@ -347,11 +366,14 @@ jobs:
           schema = int(re.search(r'(?m)^\s*Schema\s*=\s*(\d+)', source)[1])
           assert re.fullmatch(r'[a-f0-9]{40}', os.environ['GITHUB_SHA'])
           assert re.fullmatch(r'ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[a-f0-9]{64}', os.environ['IMAGE_DIGEST'])
+          assert re.fullmatch(r'ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[a-f0-9]{64}', os.environ['WORKER_IMAGE_DIGEST'])
           metadata = dict(format=1, kind='docker', version=os.environ['VERSION'], schema=schema,
-              commit=os.environ['GITHUB_SHA'], image=os.environ['IMAGE_DIGEST'], platform='linux/amd64')
+              commit=os.environ['GITHUB_SHA'], image=os.environ['IMAGE_DIGEST'], worker_image=os.environ['WORKER_IMAGE_DIGEST'], platform='linux/amd64')
           pathlib.Path('build/container-release.json').write_text(json.dumps(metadata, indent=2)+'\n')
           PY
           gh release create "$GITHUB_REF_NAME" build/container-release.json --verify-tag --draft --title "Pikmelo Server $GITHUB_REF_NAME (Docker)" --notes-file deploy/release-notes.md
+          docker tag pikmelo-online-worker:ci "$WORKER_IMAGE_NAME:latest"
+          docker push "$WORKER_IMAGE_NAME:latest"
           docker tag pikmelo-server:ci "$IMAGE_NAME:latest"
           docker push "$IMAGE_NAME:latest"
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest=false
