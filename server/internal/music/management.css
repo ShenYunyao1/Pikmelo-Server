@@ -23,6 +23,8 @@ body{font-size:14px}button,a,input,select,textarea{font:inherit}button{cursor:po
 .main{margin-left:var(--sidebar-width);transition:margin-left .18s ease}
 .brand{height:72px;min-height:72px;flex:0 0 72px;padding:0 14px;gap:6px}
 .brand-mark{flex:0 0 32px;width:32px;height:32px;aspect-ratio:1}
+.brand .brand-mark{background:transparent url('/assets/logo.png') center/contain no-repeat;color:transparent;font-size:0;border-radius:0}
+.login-card::before{content:'';display:block;width:64px;height:64px;margin-bottom:12px;background:url('/assets/logo.png') center/contain no-repeat}
 .brand-text{min-width:0;overflow:hidden}
 .nav{flex:1 1 0%;min-height:0;padding:4px 10px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:transparent transparent}
 .nav:hover,.nav:focus-within{scrollbar-color:#60708b transparent}

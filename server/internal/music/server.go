@@ -44,6 +44,7 @@ var usersPageScript []byte
 //go:embed online-player.js online-player.css lyrics-parser.js online-volume.js
 //go:embed listening-ui.js listening-ui.css listening-reporter.js
 //go:embed online-search.js online-search.css
+//go:embed logo.png
 var workspaceAssets embed.FS
 
 type API struct {
@@ -252,6 +253,7 @@ func (a *API) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		assets["/assets/tag-dictionary-ui.css"] = "text/css; charset=utf-8"
 		assets["/assets/community-realtime.js"] = "text/javascript; charset=utf-8"
 		assets["/assets/profile.css"] = "text/css; charset=utf-8"
+		assets["/assets/logo.png"] = "image/png"
 		if contentType, ok := assets[request.URL.Path]; ok {
 			data, err := workspaceAssets.ReadFile(strings.TrimPrefix(request.URL.Path, "/assets/"))
 			if err != nil {

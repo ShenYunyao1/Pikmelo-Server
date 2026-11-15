@@ -2,6 +2,10 @@ const assert=require('node:assert/strict');
 const path=require('node:path');
 
 module.exports=async function({page,directory}){
+ assert.match(await page.locator('.brand-mark').evaluate(el=>getComputedStyle(el).backgroundImage),/\/assets\/logo\.png/);
+ assert.equal(await page.locator('link[rel="icon"]').getAttribute('href'),'/assets/logo.png');
+ const logoImage=await page.evaluate(async()=>{const image=new Image();image.src='/assets/logo.png';await image.decode();return {width:image.naturalWidth,height:image.naturalHeight}});
+ assert.ok(logoImage.width>0&&logoImage.width===logoImage.height,'The supplied PNG must decode as a square logo');
  const assertNavAlignment=async()=>{
    const items=await page.locator('.nav [data-page]').evaluateAll(buttons=>buttons.filter(b=>!b.hidden).map(b=>({page:b.dataset.page,icon:b.querySelector('.nav-icon').getBoundingClientRect().left,label:b.querySelector('.nav-label').getBoundingClientRect().left,labelVisible:getComputedStyle(b.querySelector('.nav-label')).display!=='none'})));
    const reference=items.find(item=>item.page==='tracks');

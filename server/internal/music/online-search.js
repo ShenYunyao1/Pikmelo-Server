@@ -161,7 +161,7 @@ function renderOnlineResults() {
   if (!onlineSearchState.items.length) host.append(onlineElement('p','empty','没有匹配的曲目。'));
   for (const item of onlineSearchState.items) {
     const row = onlineElement('article','online-result'); row.setAttribute('role','listitem');
-    const cover = onlineElement('span','online-cover','♪'); cover.setAttribute('aria-hidden','true');
+    const cover = onlineElement('span','online-result-cover','♪'); cover.setAttribute('aria-hidden','true');
     const info = onlineElement('div','online-result-info');
     const title = makeButton(item.title || '未命名曲目',()=>openOnlineDetails(item),'text-button track-title');
     info.append(title,onlineElement('span','status',[item.artist || '未知歌手',item.album].filter(Boolean).join(' · ')));

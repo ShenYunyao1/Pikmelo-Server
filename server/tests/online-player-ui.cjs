@@ -1,12 +1,25 @@
 'use strict';
 const assert=require('node:assert/strict'),path=require('node:path');
 module.exports=async({page,directory})=>{
+ const assertSquareCover=async expected=>{
+  const cover=await page.locator('#onlineCover').boundingBox();
+  assert.equal(Math.round(cover.width),expected,'Player artwork width must retain its breakpoint size');
+  assert.equal(Math.round(cover.height),expected,'Player artwork must stay square with search styles loaded');
+  const image=page.locator('#onlineCover img');
+  if(await image.count()){
+   const box=await image.boundingBox();
+   assert.ok(Math.abs(box.width-box.height)<1,'Artwork image must fill a square');
+   assert.equal(await image.evaluate(el=>getComputedStyle(el).objectFit),'cover');
+  }
+ };
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(new URL('/#/library',page.url()).href);await page.locator('#trackRows [data-details]').waitFor();
  const tracks=await page.evaluate(async()=>{const first=state.tracks[0],bytes=new Uint8Array(44+16000*12),view=new DataView(bytes.buffer);bytes.set(new TextEncoder().encode('RIFF'));view.setUint32(4,bytes.length-8,true);bytes.set(new TextEncoder().encode('WAVEfmt '),8);view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,8000,true);view.setUint32(28,16000,true);view.setUint16(32,2,true);view.setUint16(34,16,true);bytes.set(new TextEncoder().encode('data'),36);view.setUint32(40,bytes.length-44,true);for(let i=44;i<bytes.length;i++)bytes[i]=i%70;const form=new FormData();form.append('file',new File([bytes],'Player fixture.wav'));const preview=await api('uploads/stage','POST',form),result=await api('uploads/stage/'+preview.id+'/commit','POST',{title:'夜空中的旋律 · 一个用于验证长标题布局的曲目',artist:'测试歌手',album:'城市夜行',lyrics:'[00:00.00]第一句歌词\n[00:03.00]第二句歌词\n[00:07.00]第三句歌词'});await refreshCore();return {song:result.track,first}});
  await page.evaluate(track=>playTrack({...track,detail_loaded:false,lyrics:undefined}),tracks.song);
  await page.locator('#previewBar').waitFor({state:'visible'});await page.waitForFunction(()=>Number.isFinite(memberPlayer.duration)&&memberPlayer.duration>10);
+ await assertSquareCover(76);
  assert.equal(await page.evaluate(()=>memberPlayer.controls),false);assert.equal(await page.locator('#onlineSeek').isEnabled(),true);assert.equal(await page.locator('#onlineArtist').textContent(),'测试歌手 · 城市夜行');
  const covered=await page.evaluate(async track=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=80;const ctx=canvas.getContext('2d'),gradient=ctx.createLinearGradient(0,0,80,80);gradient.addColorStop(0,'#6485ce');gradient.addColorStop(1,'#1a2e55');ctx.fillStyle=gradient;ctx.fillRect(0,0,80,80);ctx.fillStyle='#cedaff';ctx.beginPath();ctx.arc(52,24,12,0,Math.PI*2);ctx.fill();const blob=await new Promise(resolve=>canvas.toBlob(resolve)),form=new FormData();form.append('cover',blob,'player.png');await api('tracks/'+track.id+'/cover','PUT',form,undefined,track.version);const full=await api('tracks/'+track.id);playTrack({...full,detail_loaded:true});return full},tracks.song);tracks.song=covered;await page.locator('#onlineCover img').waitFor();
+ await assertSquareCover(76);
  await page.locator('#onlineLyricsToggle').click();await page.locator('#onlineLyricsPanel').waitFor({state:'visible'});await page.locator('.online-lyric-line').first().waitFor();assert.equal(await page.locator('.online-lyric-line').count(),3);
  await page.evaluate(()=>{memberPlayer.pause();memberPlayer.currentTime=4});await page.waitForFunction(()=>document.querySelector('.online-lyric-line[aria-current=true]')?.textContent==='第二句歌词');
  await page.evaluate(()=>{window.lyricSeekTrace=[];for(const event of ['seeking','seeked','play','playing','timeupdate'])memberPlayer.addEventListener(event,()=>lyricSeekTrace.push({event,time:memberPlayer.currentTime,seeking:memberPlayer.seeking,paused:memberPlayer.paused}));document.querySelector('#onlineLyricsLines').addEventListener('click',event=>lyricSeekTrace.push({event:'lyric-click',index:event.target.closest('[data-lyric-index]')?.dataset.lyricIndex,time:memberPlayer.currentTime}),true)});
@@ -25,6 +38,9 @@ module.exports=async({page,directory})=>{
  if(directory)await page.screenshot({path:path.join(directory,'online-player-desktop.png')});
  await page.locator('#onlineLyricsClose').click();assert.equal(await page.locator('#onlineLyricsToggle').getAttribute('aria-expanded'),'false');
  await page.setViewportSize({width:390,height:844});await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().right<=1);await page.locator('#onlineLyricsToggle').click();
+ await assertSquareCover(44);
+ await page.setViewportSize({width:320,height:844});await assertSquareCover(44);
+ await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);const bar=await page.locator('#previewBar').boundingBox(),lyrics=await page.locator('#onlineLyricsPanel').boundingBox();assert.ok(lyrics.y>=50&&lyrics.y+lyrics.height<bar.y,'Phone lyrics remain above the player and below the top bar');
  if(directory)await page.screenshot({path:path.join(directory,'online-player-mobile.png')});
  await page.evaluate(()=>{renderOnlineLyrics(Array.from({length:90},(_,i)=>'['+String(Math.floor(i/60)).padStart(2,'0')+':'+String(i%60).padStart(2,'0')+']歌词 '+i).join('\n'));memberPlayer.currentTime=10;highlightOnlineLyrics(true)});assert.equal(await page.locator('.online-lyric-line').count(),3,'Long synchronized lyrics only show previous, current and next');assert.equal(await page.locator('.online-lyric-line[aria-current=true]').textContent(),'歌词 10');

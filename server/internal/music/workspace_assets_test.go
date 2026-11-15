@@ -9,13 +9,15 @@ import (
 
 func TestWorkspaceAssetsAvailableBeforeLogin(t *testing.T) {
 	api, _ := testAPI(t)
-	for _, name := range []string{"management.js", "management.css", "library.js", "administration.js", "navigation.js", "feedback.js", "playlist-ui.js", "community.js", "sharing.js", "updater-ui.js"} {
+	for _, name := range []string{"logo.png", "management.js", "management.css", "library.js", "administration.js", "navigation.js", "feedback.js", "playlist-ui.js", "community.js", "sharing.js", "updater-ui.js"} {
 		t.Run(name, func(t *testing.T) {
 			response := httptest.NewRecorder()
 			api.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/assets/"+name, nil))
 			contentType := "text/javascript"
 			if strings.HasSuffix(name, ".css") {
 				contentType = "text/css"
+			} else if strings.HasSuffix(name, ".png") {
+				contentType = "image/png"
 			}
 			if response.Code != http.StatusOK || !strings.HasPrefix(response.Header().Get("Content-Type"), contentType) || response.Body.Len() == 0 {
 				t.Fatalf("asset unavailable before login: status=%d content-type=%q", response.Code, response.Header().Get("Content-Type"))
