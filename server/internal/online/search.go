@@ -29,15 +29,16 @@ import (
 )
 
 type Item struct {
-	Platform  string         `json:"platform"`
-	ID        string         `json:"id"`
-	Title     string         `json:"title"`
-	Artist    string         `json:"artist"`
-	Album     string         `json:"album"`
-	Duration  float64        `json:"duration"`
-	CoverURL  string         `json:"cover_url"`
-	Qualities []string       `json:"qualities"`
-	MusicInfo map[string]any `json:"music_info"`
+	Platform       string          `json:"platform"`
+	ID             string          `json:"id"`
+	Title          string          `json:"title"`
+	Artist         string          `json:"artist"`
+	Album          string          `json:"album"`
+	Duration       float64         `json:"duration"`
+	CoverURL       string          `json:"cover_url"`
+	Qualities      []string        `json:"qualities"`
+	QualityOptions []QualityOption `json:"quality_options"`
+	MusicInfo      map[string]any  `json:"music_info"`
 }
 
 type PlatformResult struct {
@@ -342,11 +343,11 @@ func parsePlatform(platform string, payload map[string]any, page, limit int) ([]
 }
 
 func normalizeItem(platform string, row map[string]any) Item {
-	item := Item{Platform: platform, Qualities: []string{}, MusicInfo: map[string]any{}}
+	item := Item{Platform: platform, Qualities: []string{}, QualityOptions: []QualityOption{}, MusicInfo: map[string]any{}}
 	info := item.MusicInfo
 	types := []any{}
 	typeMap := map[string]any{}
-	addQuality := func(quality string, size any, hash string) {
+	addQuality := func(quality string, size any, hash string, option QualityOption) {
 		entry := map[string]any{"type": quality, "size": text(size)}
 		details := map[string]any{"size": text(size)}
 		if hash != "" {
@@ -356,6 +357,9 @@ func normalizeItem(platform string, row map[string]any) Item {
 		types = append(types, entry)
 		typeMap[quality] = details
 		item.Qualities = append(item.Qualities, quality)
+		option.Quality = quality
+		option.SizeBytes = qualityInteger(size)
+		item.QualityOptions = append(item.QualityOptions, option)
 	}
 	switch platform {
 	case "kw":
@@ -365,9 +369,22 @@ func normalizeItem(platform string, row map[string]any) Item {
 		item.Album = text(row["ALBUM"])
 		item.Duration = number(row["DURATION"])
 		info["albumId"] = text(row["ALBUMID"])
+		reported := kuwoQualityOptions(text(row["N_MINFO"]))
 		for _, quality := range []struct{ rate, name string }{{"128", "128k"}, {"320", "320k"}, {"2000", "flac"}, {"4000", "flac24bit"}} {
 			if strings.Contains(text(row["N_MINFO"]), "bitrate:"+quality.rate+",") {
-				addQuality(quality.name, nil, "")
+				var option QualityOption
+				for _, candidate := range reported {
+					if candidate.Quality == quality.name {
+						option = candidate
+						break
+					}
+				}
+				addQuality(quality.name, nil, "", option)
+			}
+		}
+		for _, option := range reported {
+			if strings.HasPrefix(option.Quality, "kw-") {
+				item.QualityOptions = append(item.QualityOptions, option)
 			}
 		}
 	case "kg":
@@ -385,7 +402,8 @@ func normalizeItem(platform string, row map[string]any) Item {
 		info["_interval"] = item.Duration
 		for _, quality := range []struct{ prefix, name string }{{"", "128k"}, {"HQ", "320k"}, {"SQ", "flac"}, {"Res", "flac24bit"}} {
 			if number(row[quality.prefix+"FileSize"]) > 0 {
-				addQuality(quality.name, row[quality.prefix+"FileSize"], text(row[quality.prefix+"FileHash"]))
+				option := QualityOption{Format: strings.ToUpper(text(row[quality.prefix+"ExtName"])), BitrateKbps: qualityNumber(row[quality.prefix+"Bitrate"])}
+				addQuality(quality.name, row[quality.prefix+"FileSize"], text(row[quality.prefix+"FileHash"]), option)
 			}
 		}
 	case "tx":
@@ -408,7 +426,32 @@ func normalizeItem(platform string, row map[string]any) Item {
 		}
 		for _, quality := range []struct{ field, name string }{{"size_128mp3", "128k"}, {"size_320mp3", "320k"}, {"size_flac", "flac"}, {"size_hires", "flac24bit"}} {
 			if number(file[quality.field]) > 0 {
-				addQuality(quality.name, file[quality.field], "")
+				option := QualityOption{Format: "FLAC"}
+				if quality.name == "128k" || quality.name == "320k" {
+					option.Format = "MP3"
+					option.BitrateKbps = qualityNumber(strings.TrimSuffix(quality.name, "k"))
+				}
+				if quality.name == "flac24bit" {
+					option.SampleRate = int(qualityInteger(file["hires_sample"]))
+					option.BitDepth = int(qualityInteger(file["hires_bitdepth"]))
+				}
+				addQuality(quality.name, file[quality.field], "", option)
+			}
+		}
+		for _, variant := range []struct {
+			field, quality, label, format, codec string
+			bitrate                              float64
+		}{
+			{"size_24aac", "24aac", "AAC", "", "AAC", 24},
+			{"size_48aac", "48aac", "AAC", "", "AAC", 48},
+			{"size_96aac", "96aac", "AAC", "", "AAC", 96},
+			{"size_192aac", "192aac", "AAC", "", "AAC", 192},
+			{"size_96ogg", "96ogg", "OGG", "OGG", "", 96},
+			{"size_192ogg", "192ogg", "OGG", "OGG", "", 192},
+			{"size_ape", "ape", "APE", "APE", "", 0},
+		} {
+			if size := qualityInteger(file[variant.field]); size > 0 {
+				item.QualityOptions = append(item.QualityOptions, QualityOption{Quality: variant.quality, Label: variant.label, Format: variant.format, Codec: variant.codec, BitrateKbps: variant.bitrate, SizeBytes: size})
 			}
 		}
 	case "wy":
@@ -427,11 +470,24 @@ func normalizeItem(platform string, row map[string]any) Item {
 			min         float64
 		}{{"l", "128k", 128000}, {"h", "320k", 320000}, {"sq", "flac", 999000}} {
 			if maxbr >= quality.min {
-				addQuality(quality.name, object(row[quality.field])["size"], "")
+				fields := object(row[quality.field])
+				option := qualityAudioFields(fields)
+				option.BitrateKbps = qualityNumber(fields["br"]) / 1000
+				addQuality(quality.name, fields["size"], "", option)
 			}
 		}
 		if text(privilege["maxBrLevel"]) == "hires" {
-			addQuality("flac24bit", object(row["hr"])["size"], "")
+			fields := object(row["hr"])
+			option := qualityAudioFields(fields)
+			option.BitrateKbps = qualityNumber(fields["br"]) / 1000
+			addQuality("flac24bit", fields["size"], "", option)
+		}
+		if fields := object(row["m"]); qualityNumber(fields["br"]) > 0 || qualityInteger(fields["size"]) > 0 {
+			option := qualityAudioFields(fields)
+			option.Quality = "192k"
+			option.BitrateKbps = qualityNumber(fields["br"]) / 1000
+			option.SizeBytes = qualityInteger(fields["size"])
+			item.QualityOptions = append(item.QualityOptions, option)
 		}
 	case "mg":
 		if text(row["copyrightId"]) == "" {
@@ -455,7 +511,14 @@ func normalizeItem(platform string, row map[string]any) Item {
 			format := object(value)
 			quality := map[string]string{"PQ": "128k", "HQ": "320k", "SQ": "flac", "ZQ24": "flac24bit"}[text(format["formatType"])]
 			if quality != "" {
-				addQuality(quality, first(format["asize"], format["isize"]), "")
+				option := qualityAudioFields(format)
+				size := format["asize"]
+				option.FormatCode = text(format["aformat"])
+				if qualityInteger(size) == 0 {
+					size = format["isize"]
+					option.FormatCode = text(format["iformat"])
+				}
+				addQuality(quality, size, "", option)
 			}
 		}
 	}

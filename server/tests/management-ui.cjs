@@ -30,10 +30,23 @@ async function main() {
   audio.write('data', 36);
   audio.writeUInt32LE(800, 40);
   await fs.writeFile(path.join(media, 'First.wav'), audio);
-  const listener = net.createServer();
-  await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
-  const port = listener.address().port;
-  await new Promise(resolve => listener.close(resolve));
+  // Some Windows environments allocate Fetch-blocked ports for listen(0).
+  let port = 0;
+  let allowedPort = false;
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const listener = net.createServer(socket => socket.destroy());
+    await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
+    port = listener.address().port;
+    try {
+      await fetch('http://127.0.0.1:' + port, { signal: AbortSignal.timeout(1000) });
+      allowedPort = true;
+    } catch (error) {
+      allowedPort = error.cause?.message !== 'bad port';
+    }
+    await new Promise(resolve => listener.close(resolve));
+    if (allowedPort) break;
+  }
+  assert.ok(allowedPort, 'Unable to allocate a browser-compatible test port');
   const lanIP = process.env.MUSIC_SERVER_UI_LAN_IP;
   const base = 'http://' + (lanIP || '127.0.0.1') + ':' + port;
   const server = spawn(binary, ['-addr', (lanIP ? '0.0.0.0' : '127.0.0.1') + ':' + port, '-media-root', media, '-data', database], { windowsHide: true });

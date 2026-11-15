@@ -124,7 +124,7 @@ function updateOnlineSourceControls() {
   if ([...select.options].some(option=>option.value===previous)) select.value = previous;
   const usable = onlineSearchState.workerAvailable && available.size > 0;
   $('onlineSearchButton').disabled = !usable;
-  $('onlineNotice').textContent = !onlineSearchState.workerAvailable ? '在线音源 worker 尚未就绪，请管理员检查 Docker 配置。' : !available.size ? '尚无已启用的可搜索音源，请管理员导入并启用音源。' : '选择平台并搜索，导入后曲目会加入服务器曲库。';
+  $('onlineNotice').textContent = !onlineSearchState.workerAvailable ? '在线音源 worker 尚未就绪，请管理员检查 Docker 配置。' : !available.size ? '尚无已启用的可搜索音源，请管理员导入并启用音源。' : '选择平台并搜索，候选音质为平台标称信息，导入后曲目会加入服务器曲库。';
   document.querySelector('[data-online-tab="sources"]').hidden = !isAdministrator();
   renderOnlineSources();
 }
@@ -165,6 +165,25 @@ function renderOnlineResults() {
     const info = onlineElement('div','online-result-info');
     const title = makeButton(item.title || '未命名曲目',()=>openOnlineDetails(item),'text-button track-title');
     info.append(title,onlineElement('span','status',[item.artist || '未知歌手',item.album].filter(Boolean).join(' · ')));
+    const options = onlineQualityOptions(item);
+    if (options.length) {
+      const qualities = onlineElement('div','online-quality-options');
+      qualities.setAttribute('aria-label','候选音质，平台标称');
+      for (const option of options.slice(0,4)) {
+        const summary = onlineQualitySummary(option);
+        const available = onlineSourcesForQuality(item,option.quality).length > 0;
+        const chip = available
+          ? makeButton(summary,()=>openOnlineImport(item,option.quality),'online-quality-chip')
+          : onlineElement('span','online-quality-chip online-quality-readonly',summary);
+        chip.dataset.quality = option.quality;
+        chip.title = available ? '选择此音质导入' : '当前音源未支持';
+        qualities.append(chip);
+      }
+      if (options.length > 4) {
+        qualities.append(makeButton('更多音质（'+(options.length-4)+'）',()=>openOnlineDetails(item),'online-quality-more'));
+      }
+      info.append(qualities);
+    }
     const source = onlineElement('span','badge',onlinePlatformNames[item.platform] || item.platform);
     const duration = onlineElement('span','status',onlineDuration(item.duration));
     const add = makeButton('导入曲库',()=>openOnlineImport(item),'btn small');
@@ -179,6 +198,118 @@ function onlineDuration(seconds) {
   const value = Math.max(0,Math.floor(Number(seconds)||0));
   return Math.floor(value/60)+':'+String(value%60).padStart(2,'0');
 }
+function onlineQualityOptions(item) {
+  const options = [];
+  const seen = new Set();
+  const variants = new Set();
+  for (const option of item.quality_options || []) {
+    if (!option || typeof option.quality !== 'string' || !option.quality) {
+      continue;
+    }
+    const identity = JSON.stringify(option);
+    if (variants.has(identity)) {
+      continue;
+    }
+    options.push(option);
+    seen.add(option.quality);
+    variants.add(identity);
+  }
+  for (const quality of item.qualities || []) {
+    if (!seen.has(quality)) {
+      options.push({quality});
+      seen.add(quality);
+    }
+  }
+  return options;
+}
+function onlineSourcesForQuality(item,quality) {
+  if (item.qualities?.length && !item.qualities.includes(quality)) {
+    return [];
+  }
+  return onlineSearchState.sources.filter(source=>source.enabled && source.sources?.[item.platform]?.qualitys?.includes(quality));
+}
+function onlineQualityLabel(option) {
+  return option.label || ({flac:'FLAC',flac24bit:'FLAC 24-bit'}[option.quality]) || option.quality;
+}
+function onlinePositive(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+function onlineQualityValues(option) {
+  const bitrate = onlinePositive(option.bitrate_kbps);
+  const size = onlinePositive(option.size_bytes);
+  const rate = onlinePositive(option.sample_rate);
+  const bits = onlinePositive(option.bit_depth);
+  const channels = onlinePositive(option.channels);
+  const number = value=>value.toLocaleString('en-US',{maximumFractionDigits:3,useGrouping:false});
+  return {
+    format: option.format || '',
+    codec: option.codec || '',
+    bitrate: bitrate ? number(bitrate)+' kbps' : '',
+    size: size ? onlineBytes(size) : (option.size_text || ''),
+    rate: rate ? number(rate/1000)+' kHz' : '',
+    bits: bits ? number(bits)+'-bit' : '',
+    channels: channels ? number(channels) : '',
+    formatCode: option.format_code || '',
+  };
+}
+const onlineQualityColumns = [
+  ['format','格式'],['codec','编码'],['bitrate','码率'],['size','大小'],
+  ['rate','采样率'],['bits','位深'],['channels','声道'],['formatCode','平台格式码'],
+];
+function onlineQualitySummary(option) {
+  const label = onlineQualityLabel(option);
+  const values = onlineQualityValues(option);
+  const parts = [label];
+  for (const value of [values.format,values.codec]) {
+    if (value && !label.includes(value) && !parts.includes(value)) {
+      parts.push(value);
+    }
+  }
+  if (values.bitrate && option.quality !== String(option.bitrate_kbps)+'k') {
+    parts.push(values.bitrate);
+  }
+  if (values.size) {
+    parts.push(values.size);
+  }
+  return parts.join(' · ');
+}
+function appendOnlineQualityTable(host,item) {
+  const options = onlineQualityOptions(item);
+  if (!options.length) {
+    return;
+  }
+  const rows = options.map(option=>({option,values:onlineQualityValues(option)}));
+  const columns = onlineQualityColumns.filter(([key])=>rows.some(row=>row.values[key]));
+  const wrap = onlineElement('div','online-quality-table-wrap');
+  const table = onlineElement('table','online-quality-table');
+  table.append(onlineElement('caption','','候选音质 · 平台标称'));
+  const head = onlineElement('thead');
+  const heading = onlineElement('tr');
+  for (const label of ['音质',...columns.map(([,label])=>label),'可用音源']) {
+    const cell = onlineElement('th','',label);
+    cell.scope = 'col';
+    heading.append(cell);
+  }
+  head.append(heading);
+  table.append(head);
+  const body = onlineElement('tbody');
+  for (const {option,values} of rows) {
+    const row = onlineElement('tr');
+    const label = onlineElement('th','',onlineQualityLabel(option));
+    label.scope = 'row';
+    row.append(label);
+    for (const [key] of columns) {
+      row.append(onlineElement('td','',values[key]||'—'));
+    }
+    const sources = onlineSourcesForQuality(item,option.quality);
+    row.append(onlineElement('td','',sources.map(source=>source.name).join('、')||'当前音源未支持'));
+    body.append(row);
+  }
+  table.append(body);
+  wrap.append(table);
+  host.append(wrap);
+}
 function onlineDialog(title) {
   onlineSearchState.dialog?.close();
   const dialog = document.createElement('dialog'); dialog.className = 'online-dialog';
@@ -191,21 +322,56 @@ function onlineDialog(title) {
   return {dialog,body,footer};
 }
 function openOnlineDetails(item) {
-  const {body} = onlineDialog('曲目详情');
-  for (const [label,value] of [['曲名',item.title],['歌手',item.artist],['专辑',item.album],['平台',onlinePlatformNames[item.platform] || item.platform],['时长',onlineDuration(item.duration)]]) body.append(onlineElement('p','',label+' · '+(value || '—')));
+  const {dialog,body} = onlineDialog('曲目详情');
+  dialog.classList.add('online-details-dialog');
+  const details = onlineElement('dl','online-track-details');
+  for (const [label,value] of [['曲名',item.title],['歌手',item.artist],['专辑',item.album],['平台',onlinePlatformNames[item.platform] || item.platform],['时长',onlineDuration(item.duration)]]) {
+    details.append(onlineElement('dt','',label),onlineElement('dd','',value||'—'));
+  }
+  body.append(details);
+  appendOnlineQualityTable(body,item);
 }
-function openOnlineImport(item) {
+function openOnlineImport(item,preferredQuality='') {
   const {dialog,body,footer} = onlineDialog('导入曲库');
   body.append(onlineElement('p','',item.title || '未命名曲目'));
   const candidates = onlineSearchState.sources.filter(source=>source.enabled && source.sources?.[item.platform]);
   const source = onlineSelect(candidates.map(value=>[value.id,value.name])); source.id = 'onlineImportSource';
+  const preferredSource = onlineSourcesForQuality(item,preferredQuality)[0];
+  if (preferredSource) {
+    source.value = preferredSource.id;
+  }
   const quality = document.createElement('select'); quality.id = 'onlineImportQuality';
+  const options = onlineQualityOptions(item);
+  const qualityDetails = onlineElement('dl','online-quality-selected');
+  qualityDetails.id = 'onlineQualityDetails';
+  qualityDetails.setAttribute('aria-label','所选音质，平台标称');
+  const qualityNotice = onlineElement('p','status');
+  qualityNotice.setAttribute('role','status');
+  const updateQualityDetails = () => {
+    qualityDetails.replaceChildren();
+    const option = options.find(option=>option.quality===quality.value);
+    const values = onlineQualityValues(option || {});
+    for (const [key,label] of onlineQualityColumns) {
+      if (values[key]) {
+        qualityDetails.append(onlineElement('dt','',label),onlineElement('dd','',values[key]));
+      }
+    }
+    qualityDetails.hidden = !qualityDetails.children.length;
+  };
   const updateQualities = () => {
+    const previous = quality.value || preferredQuality;
     const selected = candidates.find(value=>value.id===source.value);
     const choices = selected?.sources?.[item.platform]?.qualitys || [];
     const usable = item.qualities?.length ? choices.filter(value=>item.qualities.includes(value)) : choices;
-    quality.replaceChildren(...onlineSelect(usable.map(value=>[value,value])).children);
+    quality.replaceChildren(...onlineSelect(usable.map(value=>[value,onlineQualitySummary(options.find(option=>option.quality===value)||{quality:value})])).children);
+    if (usable.includes(previous)) {
+      quality.value = previous;
+    }
     submit.disabled = !quality.options.length;
+    qualityNotice.textContent = quality.options.length
+      ? '平台标称，下载完成后展示实际音频信息。'
+      : '当前音源与平台候选音质没有交集。';
+    updateQualityDetails();
   };
   const search = onlineElement('input'); search.type = 'search';search.placeholder = '搜索我的歌单';search.id = 'onlineTargetSearch';
   const target = onlineSelect([['','仅导入全局曲库']]);target.id = 'onlineImportPlaylist';
@@ -242,7 +408,8 @@ function openOnlineImport(item) {
     } catch(error){if(current()){status.textContent=error.message;submit.disabled=false}}
   },'btn primary');
   source.onchange=updateQualities;
-  body.append(onlineField('音源',source),onlineField('音质',quality),onlineField('目标歌单搜索',search),onlineField('目标歌单',target),targetPager,status);
+  quality.onchange=updateQualityDetails;
+  body.append(onlineField('音源',source),onlineField('音质',quality),qualityNotice,qualityDetails,onlineField('目标歌单搜索',search),onlineField('目标歌单',target),targetPager,status);
   footer.prepend(submit);updateQualities();loadTargets();
 }
 function onlineBytes(bytes) {

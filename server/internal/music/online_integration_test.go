@@ -22,6 +22,31 @@ import (
 
 type onlineFixtureTransport func(*http.Request) (*http.Response, error)
 
+func TestOnlineSearchExposesCandidateQualityMetadata(t *testing.T) {
+	a, admin, _ := onlineIntegrationFixture(t)
+	onlineFixtureSource(t, a, admin)
+	fixtureClient := a.store.online.client
+	a.store.online.client = &http.Client{Transport: onlineFixtureTransport(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Hostname() != "search.kuwo.cn" {
+			return fixtureClient.Transport.RoundTrip(r)
+		}
+		body := `{"TOTAL":"1","SHOW":"1","abslist":[{"MUSICRID":"MUSIC_9007199254740993","SONGNAME":"Song","N_MINFO":"level:h,bitrate:128,format:mp3,size:2.85Mb;level:ff,bitrate:2000,format:flac,size:18.51Mb"}]}`
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+	})}
+	response := onlineFixtureRequest(t, a, admin, "GET", "search?q=Song&platform=kw&page=1&limit=20", nil, 200)
+	var result online.SearchResult
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Items) != 1 || result.Items[0].ID != "9007199254740993" || len(result.Items[0].QualityOptions) != 2 {
+		t.Fatal("candidate quality metadata missing from HTTP response")
+	}
+	quality := result.Items[0].QualityOptions[1]
+	if quality.Quality != "flac" || quality.Format != "FLAC" || quality.BitrateKbps != 0 || quality.SizeText != "18.51Mb" {
+		t.Fatalf("unexpected platform quality attributes %+v", quality)
+	}
+}
+
 func TestOnlineIntegrationSourceScriptSizeBoundary(t *testing.T) {
 	a, admin, _ := onlineIntegrationFixture(t)
 	fixtureClient := a.store.online.client
