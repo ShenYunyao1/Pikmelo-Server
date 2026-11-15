@@ -3,6 +3,15 @@ import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { createRunnerServer } from './server.mjs';
 
+// https://fetch.spec.whatwg.org/#port-blocking
+const fetchBlockedPorts=new Set([
+  0,1,7,9,11,13,15,17,19,20,21,22,23,25,37,42,43,53,69,77,79,87,95,
+  101,102,103,104,109,110,111,113,115,117,119,123,135,137,139,143,161,179,
+  389,427,465,512,513,514,515,526,530,531,532,540,548,554,556,563,587,601,
+  636,989,990,993,995,1719,1720,1723,2049,3659,4045,4190,5060,5061,6000,
+  6566,6665,6666,6667,6668,6669,6679,6697,10080,
+]);
+
 const source = `
 /** @name Fixture */
 const {EVENT_NAMES,on,send}=lx;
@@ -10,8 +19,13 @@ on(EVENT_NAMES.request, async ({info}) => 'https://example.com/'+info.type);
 send(EVENT_NAMES.inited,{sources:{kw:{type:'music',actions:['musicUrl'],qualitys:['128k','flac']}}});`;
 
 async function listen(server) {
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  return 'http://127.0.0.1:' + server.address().port;
+  for(let attempt=0;attempt<16;attempt++){
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port=server.address().port;
+    if(!fetchBlockedPorts.has(port))return 'http://127.0.0.1:'+port;
+    await new Promise(resolve=>server.close(resolve));
+  }
+  throw new Error('Operating system repeatedly allocated Fetch-blocked test ports');
 }
 
 async function withRunner(fn, options = {}) {
@@ -26,6 +40,22 @@ async function withRunner(fn, options = {}) {
     await server.closeRunner();
   }
 }
+
+test('skips fetch-blocked ports allocated by the operating system',async()=>{
+  const server=createServer((request,response)=>response.end('ok'));
+  const address=server.address.bind(server);
+  let reads=0;
+  server.address=()=>reads++===0?{...address(),port:6697}:address();
+  try {
+    const base=await listen(server);
+    assert.ok(reads>=2,'Fetch-blocked allocation must be replaced');
+    const response=await fetch(base);
+    assert.equal(await response.text(),'ok');
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve=>server.close(resolve));
+  }
+});
 
 test('initializes source declarations and executes an LX request', async () => {
   await withRunner(async run => {
@@ -72,6 +102,24 @@ test('rejects malformed platform declarations and undeclared quality', async () 
     assert.equal((await run({script:source.replace("type:'music'","type:'executable'"),action:'init'})).status,422);
     assert.equal((await run({script:source,action:'request',request:{source:'kw',action:'musicUrl',info:{type:'320k'}}})).status,422);
     assert.equal((await run({script:'lx.send(lx.EVENT_NAMES.inited,{sources:{}})',action:'init'})).status,422);
+  });
+});
+
+test('negotiates supported capabilities from extended LX source declarations',async()=>{
+  const script=source.replace("actions:['musicUrl'],qualitys:['128k','flac']", "actions:['musicUrl','search','lyric','pic'],qualitys:['128k','192k','320k','ultra']")
+    .replace("sources:{kw:", "sources:{qs:{type:'music',actions:['musicUrl'],qualitys:['128k']},kw:");
+  await withRunner(async run=>{
+    const result=await run({script,action:'init'});
+    assert.equal(result.status,200);
+    assert.deepEqual(Object.keys(result.body.sources),['kw']);
+    assert.deepEqual(result.body.sources.kw.actions,['musicUrl']);
+    assert.deepEqual(result.body.sources.kw.qualitys,['128k','320k']);
+    for(const request of [
+      {source:'kw',action:'search',info:{type:'128k'}},
+      {source:'kw',action:'musicUrl',info:{type:'192k'}},
+      {source:'qs',action:'musicUrl',info:{type:'128k'}},
+    ])assert.equal((await run({script,action:'request',request})).status,422);
+    assert.equal((await run({script:source.replace("['128k','flac']","['192k']"),action:'init'})).status,422);
   });
 });
 
@@ -130,6 +178,21 @@ test('supports buffer, AES and compression helpers',async()=>{
     const result=await run({script,action:'request',request:{source:'kw',action:'musicUrl',info:{type:'128k'}}});
     assert.equal(result.status,200);
     assert.deepEqual(result.body.result,{aes:16,text:'roundtrip'});
+  });
+});
+
+test('matches LX binary-string decoding and ArrayBuffer slice arguments',async()=>{
+  const script=source.replace("'https://example.com/'+info.type", `(()=>{
+    const array=new Uint8Array([10,20,30,40]);
+    return {
+      binary:lx.utils.buffer.bufToString(String.fromCharCode(233),'hex'),
+      slice:lx.utils.buffer.bufToString(lx.utils.buffer.from(array.buffer,1,2),'hex'),
+    };
+  })()`);
+  await withRunner(async run=>{
+    const result=await run({script,action:'request',request:{source:'kw',action:'musicUrl',info:{type:'128k'}}});
+    assert.equal(result.status,200);
+    assert.deepEqual(result.body.result,{binary:'e9',slice:'141e'});
   });
 });
 

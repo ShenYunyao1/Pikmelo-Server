@@ -57,6 +57,9 @@ def verify(args):
                 result = client.call('online/sources', 'POST', {'url': source_url})
                 report['source_imports'].append({'index': index, 'state': 'passed', 'digest': result['digest']})
                 source = result
+                if args.init_only:
+                    report['source_imports'][-1].update(name=result['name'], version=result['version'], platforms=list(result['sources']))
+                    client.call('online/sources/' + result['id'], 'DELETE')
             except urllib.error.HTTPError as error:
                 try:
                     result = json.loads(error.read(4096))
@@ -64,6 +67,10 @@ def verify(args):
                 except (ValueError, TypeError):
                     code = None
                 report['source_imports'].append({'index': index, 'state': 'failed', 'http_status': error.code, 'code': code})
+            if args.init_only:
+                print(json.dumps(report['source_imports'][-1], ensure_ascii=True))
+        if args.init_only:
+            return 0 if any(item['state'] == 'passed' for item in report['source_imports']) else 1
         if source is None:
             print('FAIL supplied source initialization')
             return 1
@@ -130,6 +137,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-url', action='append', required=True)
     parser.add_argument('--query', required=True)
+    parser.add_argument('--init-only', action='store_true', help='Import each URL, record initialization and delete it without downloading audio')
     parser.add_argument('--platform', action='append', choices=['kw', 'kg', 'tx', 'wy', 'mg'])
     parser.add_argument('--quality', default='128k', choices=['128k', '320k', 'flac', 'flac24bit'])
     parser.add_argument('--candidate-index', type=int, choices=range(5), default=0)

@@ -2,6 +2,7 @@ ARG NODE_IMAGE=node:22-bookworm-slim
 FROM ${NODE_IMAGE}
 WORKDIR /runner
 COPY server.mjs execute.mjs ./
+COPY NOTICE LICENSE-LX-Music.txt /usr/share/doc/pikmelo-online-worker/
 ENV NODE_ENV=production PORT=3000
 USER node
 ARG VCS_REF=unknown

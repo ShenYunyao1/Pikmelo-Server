@@ -68,19 +68,26 @@ const fs = require('node:fs');
   );
   assert.throws(() => fs.writeFileSync('/runner/probe', 'boundary'), {code:'EROFS'});
   assert.equal(fs.existsSync('/data/data/library.sqlite'), false, 'Worker can see the business database');
+  assert.match(fs.readFileSync('/usr/share/doc/pikmelo-online-worker/NOTICE','utf8'), /LX Music Desktop/);
+  assert.match(fs.readFileSync('/usr/share/doc/pikmelo-online-worker/LICENSE-LX-Music.txt','utf8'), /Apache License/);
   const health = await fetch('http://127.0.0.1:3000/health', {signal:AbortSignal.timeout(2000)});
   assert.equal(health.status, 200);
   const response = await fetch('http://127.0.0.1:3000/execute', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:'init',script:`
-      lx.send(lx.EVENT_NAMES.inited, {sources:{kw:{type:'music',actions:['musicUrl'],qualitys:['128k']}}});
+      lx.send(lx.EVENT_NAMES.inited, {sources:{
+        kw:{type:'music',actions:['musicUrl','search'],qualitys:['128k','192k']},
+        qs:{type:'music',actions:['musicUrl'],qualitys:['128k']},
+      }});
     `}),
     signal:AbortSignal.timeout(5000),
   });
   assert.equal(response.status, 200);
   const result = await response.json();
   assert.deepEqual(result.sources.kw.qualitys, ['128k']);
+  assert.deepEqual(result.sources.kw.actions, ['musicUrl']);
+  assert.deepEqual(Object.keys(result.sources), ['kw']);
   console.log('PASS live non-root process, blocked external HTTP, read-only root, absent business database, health and LX initialization');
 })().catch(error => {console.error(error);process.exitCode=1;});
 """

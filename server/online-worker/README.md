@@ -12,3 +12,7 @@ node server.mjs
 当前兼容 `lx.on`、`lx.send`、`lx.request`、定时器、Buffer 转换、MD5／AES／RSA／随机字节及 zlib。脚本元数据识别 `/**`、`/*!` 和普通块注释头。HTTP 支持正文和表单，multipart 暂不支持。`updateAlert` 接收后结束，不自动获取或执行更新脚本。具体第三方音源需结合用户提供的脚本验证。
 
 HTTP 回调按照 LX 桌面版行为尝试解析全部 JSON 文本，保留非 JSON 字符串，响应头键转为小写，并提供 `raw` 和 `bytes`。文本类型响应中返回的 JSON 也可作为对象使用。
+
+接口兼容参考 LX Music Desktop 固定提交 `323e4bac505da428adae8db6b58039fb2b36b86d` 的 `src/main/modules/userApi/renderer/preload.js`。沿用其能力交集规则，提取宿主支持的平台、动作和音质，脚本额外声明的能力随协商结果过滤。请求阶段继续检查已协商的动作与音质。Buffer 工具支持二进制字符串解码和 ArrayBuffer 的 offset／length 参数，同时受执行器大小限制。来源说明及 Apache-2.0 许可证随 worker 镜像分发。
+
+2026-11-15 的仓库音源矩阵在受限 Compose 环境运行，详细结果见 [在线搜索开发计划](../../Docs/服务器/在线搜索与LX音源导入开发计划.md#多音源兼容性完善)。音源可导入后，还需结合真实曲目验证其上游返回和入库结果。

@@ -1,0 +1,13 @@
+Pikmelo Server LX source worker
+
+The LX API capability negotiation and request/utility compatibility in
+execute.mjs are adapted from LX Music Desktop by lyswhut and contributors.
+
+Upstream: https://github.com/lyswhut/lx-music-desktop
+Reference commit: 323e4bac505da428adae8db6b58039fb2b36b86d
+Reference file: src/main/modules/userApi/renderer/preload.js
+License: Apache License 2.0, reproduced in LICENSE-LX-Music.txt.
+
+Pikmelo adaptations replace Electron IPC and direct HTTP with a bounded
+container worker and short-lived, public-network-only HTTP capabilities.
+The host advertises its supported intersection of source capabilities.

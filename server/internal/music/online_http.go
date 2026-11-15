@@ -243,9 +243,9 @@ func (a *API) onlineSources(w http.ResponseWriter, r *http.Request, o *onlineSer
 		return
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, (512<<10)+1))
-	if err != nil || response.StatusCode != 200 || len(body) > 512<<10 || len(body) == 0 || !utf8.Valid(body) {
-		writeError(w, 400, "ONLINE_SOURCE_INVALID", "音源须为有效 UTF-8 脚本，最大 512 KiB")
+	body, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
+	if err != nil || response.StatusCode != 200 || len(body) > 1<<20 || len(body) == 0 || !utf8.Valid(body) {
+		writeError(w, 400, "ONLINE_SOURCE_INVALID", "音源须为有效 UTF-8 脚本，最大 1 MiB")
 		return
 	}
 	result, err := o.broker.Execute(ctx, o.workerURL, string(body), "init", nil)

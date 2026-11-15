@@ -22,6 +22,28 @@ import (
 
 type onlineFixtureTransport func(*http.Request) (*http.Response, error)
 
+func TestOnlineIntegrationSourceScriptSizeBoundary(t *testing.T) {
+	a, admin, _ := onlineIntegrationFixture(t)
+	fixtureClient := a.store.online.client
+	for _, size := range []int{700 << 10, 1 << 20, (1 << 20) + 1} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			header := []byte("/**\n * @name Large source fixture\n * @version 1\n */\n//")
+			body := append(header, bytes.Repeat([]byte("x"), size-len(header))...)
+			a.store.online.client = &http.Client{Transport: onlineFixtureTransport(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Hostname() != "source.example.test" {
+					return fixtureClient.Transport.RoundTrip(r)
+				}
+				return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"text/javascript"}}, Body: io.NopCloser(bytes.NewReader(body)), ContentLength: int64(len(body)), Request: r}, nil
+			})}
+			expected := 201
+			if size > 1<<20 {
+				expected = 400
+			}
+			onlineFixtureRequest(t, a, admin, "POST", "sources", map[string]string{"url": "https://source.example.test/large.js"}, expected)
+		})
+	}
+}
+
 func TestOnlineIntegrationReportsActualAudioWhenSourceDowngradesFLAC(t *testing.T) {
 	a, admin, _ := onlineIntegrationFixture(t)
 	source := onlineFixtureSource(t, a, admin)

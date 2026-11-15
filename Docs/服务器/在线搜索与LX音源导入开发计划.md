@@ -114,3 +114,74 @@ ghcr.io/shenyunyao1/pikmelo-server-online-worker@sha256:dedd01d1669220ada61a01ed
 直接使用正式摘要镜像再次通过真实 Chromium、初始化和上传、非 root／只读根、网页 Docker 提示、重建持久化、实际 LX 初始化、schema 8→9、故意失败健康门禁、旧镜像与快照恢复 8、完整备份导入、自定义数据路径及原 Key 媒体读取。worker 独立边界测试再次通过。随机容器、网络和卷清理，验收产物位于已忽略的 `server/build/release-verify-0.21.20/`。
 
 Docker 稳定通道已推进到 0.21.20，原生 GitHub latest 仍为 v0.21.18。本期交付为源码、Actions、双镜像与 Release 验收，实际运行实例由用户按 Docker 使用说明更新。
+
+## 多音源兼容性完善
+
+2026-11-15，用户授权参考 `pdone/lx-music-source` 中的可用音源完善兼容层。本阶段在 `main` 开发并本地提交，发行另行授权。先记录仓库提交、脚本摘要和上游探测范围，再在受限容器中完成导入／初始化矩阵，针对稳定复现的接口差异补充受控回归，最后通过主服务验证搜索、解析和实际入库。第三方脚本及原始诊断存放在忽略的 `server/build/lx-compat-20261115/`。
+
+- [x] O10 建立仓库音源清单及实际初始化结果，区分上游可达与曲目解析成功。
+- [x] O11 修复复现的脚本声明、网络及工具接口兼容问题，验证限制与权限边界。
+- [x] O12 验证新增音源的实际入库，更新文档、验证脚本和本地提交。
+
+### 参考实现与兼容修复
+
+本阶段按用户澄清，重点为 LX JavaScript 音源执行及歌曲地址解析。兼容行为以 LX Music Desktop 固定提交 `323e4bac505da428adae8db6b58039fb2b36b86d` 的 [preload.js](https://github.com/lyswhut/lx-music-desktop/blob/323e4bac505da428adae8db6b58039fb2b36b86d/src/main/modules/userApi/renderer/preload.js) 为依据，将能力协商和 Buffer 工具行为适配到现有 worker／broker。
+
+- 平台、动作和音质沿用 LX 的交集规则。忽略额外平台及能力声明，保留宿主支持的动作／音质；请求阶段继续拒绝未协商动作和音质。原先“出现扩展声明就拒绝整个脚本”的回归先失败，再修复通过。
+- `bufToString` 按二进制字符串语义解码，`buffer.from` 支持 ArrayBuffer 的 offset／length 参数。两项行为先复现与 LX 的差异，再通过回归。
+- 导入上限改为 1 MiB，以接纳 639,619 字节的 fish_music。700 KiB、恰好 1 MiB 及超限一字节的接口测试通过，仍执行 UTF-8、权限和资源预算校验。
+- worker 增加出处说明和 Apache-2.0 许可证，构建镜像内包含相应文件，实际容器断言验证。
+
+Electron IPC 由既有 HTTP 接口衔接，音源仍在内部网络、非 root、只读根和资源限制的容器执行。执行时限和公网请求限制继续适用，当前覆盖标准音源接口及已测试的扩展声明。
+
+### 仓库音源矩阵
+
+测试快照为 [pdone/lx-music-source 提交 ed8328d](https://github.com/pdone/lx-music-source/tree/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2)，逐份通过主服务导入并执行初始化。仓库的健康报告通过静态提取主机后发起 HTTP GET 探测，报告中的可用性作为选择线索，实际结果以下表与入库验证为准。[上游探测实现](https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/probe.py)
+
+| 音源目录 | 0.21.20 初始化 | 本阶段初始化 |
+| --- | --- | --- |
+| changqing | 通过 | 通过 |
+| feichangdao | 失败 | 通过 |
+| fish | 超过旧大小上限 | 通过 |
+| flower | 通过 | 通过 |
+| grass | 通过 | 通过 |
+| helloworld | 失败 | 通过 |
+| huanyin | 失败 | 通过 |
+| huibq | 通过 | 通过 |
+| hyw | 失败 | 通过 |
+| ikun | 失败 | 通过 |
+| jiexiang | 失败 | 通过 |
+| juhe | 失败 | 通过 |
+| lx | 失败 | 15 秒内未完成初始化 |
+| qdy | 失败 | 通过 |
+| qingliang | 通过 | 通过 |
+| sixyin | 通过 | 通过 |
+| suyin | 失败 | 依赖未支持的配置界面事件 |
+| xinghai | 失败 | 通过 |
+| xinglan | 失败 | 通过 |
+| yuningxi | 失败 | 通过 |
+
+最终源码镜像复测 20 份，18 份通过。`lx` 的隔离诊断返回执行器 HTTP 504；`suyin` 在注册 `EVENT_NAMES.showConfigView` 时失败，该配置界面事件属于当前标准接口覆盖范围以外的能力。两项均保留失败记录。其他脚本通过初始化后，其曲目可用性继续依赖上游接口和具体歌曲。
+
+### 实际曲目验证
+
+使用“欢乐颂”查询并选择有界时长样本，通过主服务创建任务，核对下载字节、探测格式／码率及加入本人歌单后的成员关系。fish_music 1.9.0 的脚本 SHA-256 为 `a711e152c4f28c32fd46b38839a70f476e0b669905773a90e2ce63246136af47`，HelloWorld 260925 为 `12d7a289647b4f4ff8b94d4b27d06a55b7ca9b9be6ac89c602cac2052eced723`。
+
+| fish_music 平台 | 请求音质 | 实际结果 | 音频字节 |
+| --- | --- | --- | --- |
+| 酷狗 | 128k | MP3 128 kbps，入库通过 | 1,003,564 |
+| 酷我 | 128k | MP3 128 kbps，入库通过 | 2,987,781 |
+| 咪咕 | 128k | MP3 128 kbps，入库通过 | 4,086,579 |
+| 网易 | 128k | MP3 128 kbps，入库通过 | 1,691,524 |
+| QQ | 128k | M4A 98 kbps，入库通过 | 1,376,239 |
+| 网易 | FLAC | FLAC 398 kbps，入库通过 | 5,257,385 |
+
+HelloWorld 的酷狗／酷我／网易样本通过，咪咕样本解析失败。长青源所测五个平台样本和轻量源所测三个平台样本解析失败。并行初测时 QQ 搜索暂时不可用，单独复测后取得上述 QQ 样本。请求音质与实际返回格式、码率分别记录，避免根据音源声明推断下载结果。
+
+### 本地验证与状态
+
+Go 在线业务、实际 Node 回调、安全网络、Host／Origin 专项通过，`music` 约 6.1 秒、`online` 约 2.0 秒，相关 vet 通过。十四项 Node 用例通过。实际 worker 容器验证能力协商、许可文件、无业务挂载、非 root／只读根、禁公网直连及资源限制。初始化验证增加 `--init-only`，逐份导入、记录并删除隔离库中的测试音源，适用于超过八份候选的矩阵。
+
+提交前复测遇到 Windows 临时端口分配到 6669，Node Fetch 按规范拒绝并报 `bad port`。新增受控复现后修复测试端口选择，测试夹具重新申请允许端口，生产网络策略继续生效。
+
+本阶段 schema 保持 9，针对性本地验证完成，完整 CI 和后续版本镜像待另行授权推送发行。第三方源码、音频、账户和原始诊断均位于忽略目录，实际测试使用随机隔离项目并清理临时资源。

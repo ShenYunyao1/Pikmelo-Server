@@ -13,16 +13,18 @@ const lifetime = setInterval(() => {}, 1000);
 function normalizeSources(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid source declarations');
   const result = {};
-  for (const [platform, item] of Object.entries(data)) {
-    if (!platforms.has(platform) || !item || item.type !== 'music' || !Array.isArray(item.actions) || !Array.isArray(item.qualitys)) {
+  for (const platform of platforms) {
+    const item=data[platform];
+    if (!item || item.type !== 'music') continue;
+    if (!Array.isArray(item.actions) || !Array.isArray(item.qualitys)) {
       throw new Error('Invalid platform declaration');
     }
-    const actions = platform === 'local' ? ['musicUrl','lyric','pic'] : ['musicUrl'];
-    if (!item.actions.length || item.actions.some(action=>!actions.includes(action)) || item.qualitys.some(quality=>!qualities.has(quality))) {
-      throw new Error('Invalid actions or qualities');
-    }
-    if (platform !== 'local' && !item.qualitys.length) throw new Error('Source quality list is empty');
-    result[platform] = {name:String(item.name || platform).slice(0,128),type:'music',actions:[...new Set(item.actions)],qualitys:[...new Set(item.qualitys)]};
+    // LX intersects declarations with host capabilities, including extended sources.
+    const supportedActions = platform === 'local' ? ['musicUrl','lyric','pic'] : ['musicUrl'];
+    const actions = supportedActions.filter(action=>item.actions.includes(action));
+    const qualitys = [...qualities].filter(quality=>item.qualitys.includes(quality));
+    if (!actions.length || (platform !== 'local' && !qualitys.length)) continue;
+    result[platform] = {name:String(item.name || platform).slice(0,128),type:'music',actions,qualitys};
   }
   if (!Object.keys(result).length) throw new Error('Source does not declare a platform');
   return result;
@@ -38,10 +40,10 @@ function metadata(script) {
   return Object.freeze(result);
 }
 
-function checkedBuffer(value, encoding) {
+function checkedBuffer(value, ...arguments_) {
   if (typeof value === 'string' && value.length > maxBytes) throw new Error('Buffer exceeds limit');
   if (value?.length > maxBytes) throw new Error('Buffer exceeds limit');
-  const result = Buffer.from(value, encoding);
+  const result = Buffer.from(value, ...arguments_);
   if (result.length > maxBytes) throw new Error('Buffer exceeds limit');
   return result;
 }
@@ -117,7 +119,7 @@ async function execute() {
     },
     request:brokerRequest,
     utils:{
-      buffer:{from:checkedBuffer,bufToString:(value,format)=>checkedBuffer(value).toString(format)},
+      buffer:{from:checkedBuffer,bufToString:(value,format)=>checkedBuffer(value,'binary').toString(format)},
       crypto:{
         md5:value=>createHash('md5').update(checkedBuffer(value)).digest('hex'),
         randomBytes(size) { if (!Number.isInteger(size)||size<0||size>maxBytes) throw new Error('Invalid random buffer size'); return randomBytes(size); },
