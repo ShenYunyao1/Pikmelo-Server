@@ -1,5 +1,5 @@
-# Pikmelo Server v0.21.21
-<!-- musicserver-release: {"version":"0.21.21","schema":9,"status":"stable"} -->
+# Pikmelo Server v0.21.22
+<!-- musicserver-release: {"version":"0.21.22","schema":9,"status":"stable"} -->
 
 Pikmelo Server · 拾律服务器，数据库 schema 9，Linux amd64 Docker 发行。扩展在线搜索候选音质展示、完善 LX 音源兼容，并更新网页 Logo 与播放封面布局。主服务与隔离音源 worker 配套发布。
 
@@ -11,6 +11,7 @@ Pikmelo Server · 拾律服务器，数据库 schema 9，Linux amd64 Docker 发�
 - LX 音源初始化按执行器支持能力协商，补齐标准 Buffer 二进制接口，音源脚本大小上限提高到 1 MiB。镜像包含相关上游许可与出处说明。
 - 接入服务器 Logo 与网页图标，修复在线搜索样式对在线播放横幅封面尺寸的影响，桌面和手机封面保持正方形。
 - 改进浏览器测试端口分配，遇到 Fetch 禁用端口时自动重新分配。
+- 修复快速切换详情与导入弹窗时，旧关闭事件干扰新弹窗歌单加载的问题。
 
 ## 真实音源测试范围
 
@@ -18,15 +19,15 @@ Pikmelo Server · 拾律服务器，数据库 schema 9，Linux amd64 Docker 发�
 
 fish_music 1.9.0 的酷我／酷狗／QQ／网易／咪咕指定样本完成下载、校验及加入本人歌单，网易 FLAC 样本实际探测为 FLAC。QQ 128k 样本实际返回 M4A 约 98 kbps，候选参数与实际下载参数分别记录。其他音源的部分样本仍解析失败。
 
-五平台候选元数据已抽样核对，重复查询时 QQ 搜索曾暂时不可用。multipart、依赖 DOM 或动态代码生成的脚本，以及加密 QRC／KRC 歌词仍需后续适配。完整样本、脚本摘要和验证记录见 [在线搜索开发计划](https://github.com/ShenYunyao1/Pikmelo-Server/blob/v0.21.21/Docs/服务器/在线搜索与LX音源导入开发计划.md)。
+五平台候选元数据已抽样核对，重复查询时 QQ 搜索曾暂时不可用。multipart、依赖 DOM 或动态代码生成的脚本，以及加密 QRC／KRC 歌词仍需后续适配。完整样本、脚本摘要和验证记录见 [在线搜索开发计划](https://github.com/ShenYunyao1/Pikmelo-Server/blob/v0.21.22/Docs/服务器/在线搜索与LX音源导入开发计划.md)。
 
 ## Docker 镜像与升级
 
 两个镜像须选用同一版本，可使用 Release 清单中的摘要固定身份。
 
 ```text
-ghcr.io/shenyunyao1/pikmelo-server:0.21.21
-ghcr.io/shenyunyao1/pikmelo-server-online-worker:0.21.21
+ghcr.io/shenyunyao1/pikmelo-server:0.21.22
+ghcr.io/shenyunyao1/pikmelo-server-online-worker:0.21.22
 ```
 
 `container-release.json` 记录版本、schema、源码提交及两个镜像摘要，各镜像附带来源证明。
@@ -41,4 +42,4 @@ docker compose ps
 
 本版保持 schema 9，已有曲库、账户、Key、UUID、歌单及媒体继续使用。音源与任务状态随数据库备份保存，服务重启后中断任务可由用户重试。既有 schema 8 数据由应用按已支持路径备份并事务迁移，跨 schema 回退须恢复对应停机快照。
 
-完整初始化、备份、升级、回退和已有安装导入步骤见 [Docker 使用说明](https://github.com/ShenYunyao1/Pikmelo-Server/blob/v0.21.21/server/deploy/docker.md)。
+完整初始化、备份、升级、回退和已有安装导入步骤见 [Docker 使用说明](https://github.com/ShenYunyao1/Pikmelo-Server/blob/v0.21.22/server/deploy/docker.md)。

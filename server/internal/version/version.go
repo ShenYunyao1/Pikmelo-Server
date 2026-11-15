@@ -18,7 +18,7 @@ const (
 	BinaryName  = "pikmelo-server"
 	UpdaterName = "pikmelo-server-updater"
 	// Version is the current music server API and management UI version.
-	Version = "0.21.21"
+	Version = "0.21.22"
 	Schema  = 9
 )
 

@@ -1,4 +1,4 @@
-# Pikmelo Server · 拾律服务器 0.21.21
+# Pikmelo Server · 拾律服务器 0.21.22
 
 ## Docker 运行与发行
 
