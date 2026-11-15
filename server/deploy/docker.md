@@ -131,7 +131,9 @@ worker 仅连接 `internal` Docker 网络，不发布宿主端口、不挂载数
 
 下载沿用账户上传权限、邮箱策略和音频／附件额度，同时受临时预算保护。无 Content-Length 的响应先预留不超过 64 MiB 的上限并显示已下载字节，结束后按实际大小校验。重启后未完成任务标记为可重试，保留有效续传检查点；用户点击重试后重新验证会话和权限，强 ETag 与 Content-Range 一致时继续，否则重新下载。取消、损坏及过期预览重试会重建检查点。
 
-兼容范围为标准 LX `musicUrl`、定时器、网络回调及有限的 Buffer／加密／压缩工具。multipart 和依赖浏览器 DOM、动态代码生成等特殊环境的脚本需要后续适配。搜索适配 `kw/kg/tx/wy/mg`，当前普通歌词支持酷我／网易、具有 LRC 的咪咕／酷狗；加密 QRC／KRC 等暂不解码。可选附件失败记录日志，音频可独立入库。真实音源兼容性和平台服务可用性另行验证。
+兼容范围为标准 LX `musicUrl`、定时器、网络回调及有限的 Buffer／加密／压缩工具。multipart 和依赖浏览器 DOM、动态代码生成等特殊环境的脚本需要后续适配。搜索适配 `kw/kg/tx/wy/mg`，当前普通歌词支持酷我／网易、具有 LRC 的咪咕／酷狗；加密 QRC／KRC 等暂不解码。可选附件失败记录日志，音频可独立入库。
+
+2026-11-15 使用六音 v1.2.1 实测，五个平台搜索均返回结果，网易 128k／320k 和 QQ 128k 的指定样本已完成下载、校验及加入本人歌单。酷我／酷狗／咪咕的两个测试查询样本解析失败，可用性依赖曲目和音源上游。网易样本请求 FLAC 时返回 320 kbps MP3，下载任务会显示实际格式、码率及格式不符提示。完整样本和脚本摘要记录在 [开发计划](../../Docs/服务器/在线搜索与LX音源导入开发计划.md)。
 
 原生直接启动时可通过 `PIKMELO_ONLINE_WORKER_URL` 指向隔离 worker，并设置 `PIKMELO_ONLINE_BROKER_URL` 为该 worker 能访问的主服务 broker 地址。未配置 worker 时页面提示不可用，既有曲库功能继续运行。Compose 已配置这两个地址，修改网络或服务名时需保持可达。
 
@@ -145,6 +147,16 @@ node tests/online-search-ui.cjs
 ```
 
 浏览器专项沿用测试目录的 Playwright。平台适配来源及许可位于 `internal/online/NOTICE` 和 `LICENSE-LX-Music.txt`，容器同时包含这两份文件。
+
+真实第三方音源测试需显式指定链接及本地镜像，使用随机隔离项目和临时卷，测试结束自动清理。以下命令在 `server` 目录运行，报告写入已忽略的 `build`。该测试按指定样本记录结果，至少一个样本完成入库时退出成功，各平台结果须结合报告核对。日常 CI 使用受控夹具，第三方可用性测试单独运行。
+
+```sh
+python tests/online-source-live.py \
+  --source-url https://raw.githubusercontent.com/pdone/lx-music-source/main/sixyin/latest.js \
+  --query 小星星 --platform wy --quality 128k \
+  --image pikmelo-server:local --worker-image pikmelo-online-worker:local \
+  --report build/online-source-live.json
+```
 
 本分支的服务端 CI 验证 Go／vet、网页、镜像及实际容器升级回退，版本标签与源码版本一致时发布 GHCR 版本镜像、稳定通道和 GitHub Release。Release 的 `container-release.json` 记录版本、schema、源码提交及镜像摘要，流水线同时生成镜像来源证明。
 

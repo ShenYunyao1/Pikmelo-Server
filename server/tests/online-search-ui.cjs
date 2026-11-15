@@ -62,6 +62,11 @@ async function fixture(browser) {
     const submitted=await page.evaluate(()=>calls.find(call=>call.path==='online/jobs'&&call.method==='POST').body);
     assert.equal(submitted.target_playlist_id,'playlist-52');assert.equal(submitted.source_id,'source-one');
     assert.equal(await page.locator('.online-job progress').getAttribute('value'),'120');
+    await page.evaluate(()=>renderOnlineJobs([{id:'quality-job',title:'Source fallback',platform:'wy',quality:'flac',status:'completed',
+      downloaded:3000,total:3000,actual_format:'mp3',actual_bitrate_kbps:320,warning:'音源返回的实际格式为 MP3，与请求的 FLAC 不一致。'}]));
+    assert.match(await page.locator('.online-job').textContent(),/请求 flac/);
+    assert.match(await page.locator('.online-job').textContent(),/实际音频 MP3 · 320 kbps/);
+    assert.match(await page.locator('.online-job').textContent(),/与请求的 FLAC 不一致/);
     await page.evaluate(()=>{setOnlineTab('search');delaySearch=true;searchOnline(1)});
     await page.waitForFunction(()=>typeof releaseSearch==='function');
     await page.evaluate(()=>{clearOnlineSearchWorkspace();state.user={id:'bob',role:'member'};releaseSearch()});

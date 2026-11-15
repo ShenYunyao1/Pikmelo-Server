@@ -132,3 +132,37 @@ test('supports buffer, AES and compression helpers',async()=>{
     assert.deepEqual(result.body.result,{aes:16,text:'roundtrip'});
   });
 });
+
+test('reads script metadata from LX license-style headers',async()=>{
+  const script=`/*!
+ * @name License fixture
+ * @version v1.2.1
+ * @author Fixture author
+ */
+if(lx.currentScriptInfo.name!=='License fixture'||lx.currentScriptInfo.version!=='v1.2.1')throw new Error('Missing script metadata');
+`+source.replace('/** @name Fixture */','');
+  await withRunner(async run=>{
+    const result=await run({script,action:'init'});
+    assert.equal(result.status,200);
+    assert.deepEqual(result.body.sources.kw.qualitys,['128k','flac']);
+  });
+});
+
+test('matches LX JSON parsing and response shape for text endpoints',async()=>{
+  const broker=createServer((req,res)=>{
+    req.resume();
+    req.on('end',()=>res.end(JSON.stringify({statusCode:200,headers:{'Content-Type':'text/plain'},body:'{"url":"https://example.com/audio"}'})));
+  });
+  const brokerURL=await listen(broker);
+  try {
+    await withRunner(async run=>{
+      const script=source.replace("async ({info}) => 'https://example.com/'+info.type", `()=>new Promise((resolve,reject)=>lx.request('https://example.com/song',{},(err,resp,body)=>{
+        if(err)return reject(err);
+        resolve({url:body.url,contentType:resp.headers['content-type'],raw:resp.raw.toString('utf8'),bytes:resp.bytes});
+      }))`);
+      const result=await run({script,action:'request',request:{source:'kw',action:'musicUrl',info:{type:'128k'}},broker:{url:brokerURL,token:'fixture-capability'}});
+      assert.equal(result.status,200);
+      assert.deepEqual(result.body.result,{url:'https://example.com/audio',contentType:'text/plain',raw:'{"url":"https://example.com/audio"}',bytes:35});
+    });
+  } finally {await new Promise(resolve=>broker.close(resolve));}
+});

@@ -2,6 +2,7 @@ package music
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,85 @@ import (
 )
 
 type onlineFixtureTransport func(*http.Request) (*http.Response, error)
+
+func TestOnlineIntegrationReportsActualAudioWhenSourceDowngradesFLAC(t *testing.T) {
+	a, admin, _ := onlineIntegrationFixture(t)
+	source := onlineFixtureSource(t, a, admin)
+	if err := readOnlineValue(a.store.db, onlineSourcePrefix+source.ID, &source); err != nil {
+		t.Fatal(err)
+	}
+	capability := source.Sources["kw"]
+	capability.Qualities = append(capability.Qualities, "flac")
+	source.Sources["kw"] = capability
+	if err := a.store.transaction(func(tx *sql.Tx) error { return saveOnlineValue(tx, onlineSourcePrefix+source.ID, source) }); err != nil {
+		t.Fatal(err)
+	}
+	response := onlineFixtureRequest(t, a, admin, "POST", "jobs", map[string]any{"source_id": source.ID, "quality": "flac", "item": online.Item{Platform: "kw", ID: "fixture", Title: "Fixture quality", MusicInfo: map[string]any{"songmid": "fixture"}}}, 202)
+	var job onlineJob
+	if err := json.Unmarshal(response.Body.Bytes(), &job); err != nil {
+		t.Fatal(err)
+	}
+	job = onlineAwaitFixtureJob(t, a, job.ID, "completed")
+	if job.Warning == "" || job.ActualFormat != "wav" || job.ActualBitrate == 0 {
+		t.Fatal("source audio mismatch was hidden", job.Warning, job.ActualFormat)
+	}
+	view := onlineFixtureRequest(t, a, admin, "GET", "jobs", nil, 200)
+	if !strings.Contains(view.Body.String(), "actual_format") || !strings.Contains(view.Body.String(), "warning") {
+		t.Fatal("actual format not exposed to task owner")
+	}
+}
+
+func TestOnlineBrokerCapabilityWithInternalDockerHost(t *testing.T) {
+	a, _ := testAPI(t)
+	a.SetAuthConfig(AuthConfig{LANHTTP: true})
+	client := &http.Client{Transport: onlineFixtureTransport(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"ok":true}`)), Request: r}, nil
+	})}
+	server := httptest.NewServer(a)
+	defer server.Close()
+	a.store.online.broker = online.NewBroker(client, server.URL+"/api/v2/online/broker")
+	worker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct{ Broker struct{ URL, Token string } }
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Error(err)
+			w.WriteHeader(500)
+			return
+		}
+		request, _ := http.NewRequest("POST", payload.Broker.URL, strings.NewReader(`{"url":"https://example.com/test","method":"GET"}`))
+		request.Host = "pikmelo:8080"
+		request.Header.Set("Authorization", "Bearer "+payload.Broker.Token)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Error(err)
+			w.WriteHeader(500)
+			return
+		}
+		defer response.Body.Close()
+		if response.StatusCode != 200 {
+			t.Errorf("capability broker rejected internal service host: %d", response.StatusCode)
+			w.WriteHeader(500)
+			return
+		}
+		io.WriteString(w, `{"sources":{"kw":{"type":"music","actions":["musicUrl"],"qualitys":["128k"]}}}`)
+	}))
+	defer worker.Close()
+	if _, err := a.store.online.broker.Execute(context.Background(), worker.URL, "fixture", "init", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/v2/online/broker", "/api/v2/online/sources"} {
+		request := httptest.NewRequest("POST", "http://pikmelo:8080"+path, strings.NewReader(`{}`))
+		request.RemoteAddr = "172.22.0.3:12345"
+		response := httptest.NewRecorder()
+		a.ServeHTTP(response, request)
+		expected := 401
+		if path != "/api/v2/online/broker" {
+			expected = 403
+		}
+		if response.Code != expected {
+			t.Fatalf("path %s status %d expected %d", path, response.Code, expected)
+		}
+	}
+}
 
 func TestOnlineIntegrationCancelAfterReloginAndEmailPolicyChange(t *testing.T) {
 	a, _, _ := onlineIntegrationFixture(t)

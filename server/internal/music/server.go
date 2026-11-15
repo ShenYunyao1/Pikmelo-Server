@@ -164,6 +164,15 @@ func (a *API) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("X-Request-ID", requestID)
 		request.Header.Set("X-Music-Request-ID", requestID)
 	}
+	if request.URL.Path == "/api/v2/online/broker" {
+		request.Body = http.MaxBytesReader(response, request.Body, 2<<20)
+		if a.store.online == nil {
+			writeError(response, 503, "ONLINE_UNAVAILABLE", "online module unavailable")
+			return
+		}
+		a.store.online.broker.ServeHTTP(response, request)
+		return
+	}
 	if !a.allowLANHTTP(request) {
 		writeError(response, http.StatusForbidden, "LAN_HTTP_ONLY", "HTTP access requires a local/private peer and an IP or localhost host; use HTTPS for public access")
 		return
@@ -279,14 +288,6 @@ func (a *API) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		request.Body = http.MaxBytesReader(response, request.Body, 2<<20)
 	}
 	var auth authContext
-	if request.URL.Path == "/api/v2/online/broker" {
-		if a.store.online == nil {
-			writeError(response, 503, "ONLINE_UNAVAILABLE", "online module unavailable")
-			return
-		}
-		a.store.online.broker.ServeHTTP(response, request)
-		return
-	}
 	if request.URL.Path == "/api/v2/setup" {
 		a.webSetup(response, request)
 		return

@@ -17,7 +17,7 @@
 - [x] O05 复用现有校验、去重、配额、提交回执及本人歌单入库，防止重试产生重复状态。
 - [x] O06 实现在线搜索、音源管理和下载任务网页，覆盖手机、账户隔离和异步竞态。
 - [x] O07 补齐 Docker worker 配置、使用说明及 CI 门禁，完成针对性自动化和真实容器验证。
-- [ ] O08 使用用户后续提供的真实 LX 音源验证兼容性与可用平台。
+- [x] O08 使用用户提供的真实 LX 音源验证兼容性，记录各平台通过／失败及音质边界。
 
 ## 文件与职责
 
@@ -34,7 +34,7 @@
 - `GET sources` 返回 `{sources,worker_available}`，管理员以外隐藏原始链接与脚本。`POST sources` 接收 `{url}`，抓取脚本并测试初始化。`PATCH sources/{id}` 接收 `{enabled}`，`DELETE` 删除未使用源。
 - `GET search?q=&platform=all&page=1&limit=20` 返回 `{items,platforms,has_more}`。每项包含 `platform,id,title,artist,album,duration,cover_url,qualities,music_info`，`music_info` 保留 LX 所需原始字段。平台状态包含 `platform,error,has_more`。仅已安装搜索适配器和已启用源支持的平台参与搜索。
 - `GET jobs` 返回 `{jobs}`。`POST jobs` 接收 `{source_id,item,quality,target_playlist_id}`，返回任务。`POST jobs/{id}/cancel` 取消，`POST jobs/{id}/retry` 重试。
-- 任务字段为 `id,title,platform,quality,status,downloaded,total,error,track_id,created_at`。状态为 `queued,resolving,downloading,validating,completed,failed,cancelled`，完成入库继续遵循 UUID 规则。
+- 任务字段为 `id,title,platform,quality,status,downloaded,total,error,track_id,created_at`，校验后补充 `actual_format,actual_bitrate_kbps,warning`。`quality` 保留请求音质，实际格式和码率取自音频探测，FLAC 格式不符时给出提示。状态为 `queued,resolving,downloading,validating,completed,failed,cancelled`，完成入库继续遵循 UUID 规则。
 - Worker `POST /execute` 接收 `{script,action,request,broker}`。`action=init` 返回 `{sources}`；`action=request` 通过标准 `lx.EVENT_NAMES.request` 调用并返回 `{result}`。`request` 为 `{source,action,info}`，`broker` 为临时 `{url,token}`。每次执行独立上下文及总超时。
 - Worker 的 `lx.request` 通过 broker 执行。broker 接收 `{url,method,headers,body}`，返回 `{statusCode,headers,body}`，统一限制目标公网地址、重定向、时限及响应大小。临时 token 仅允许当前请求周期及受限请求次数。
 
@@ -63,3 +63,31 @@
 - 歌词优先获取普通 LRC 及可对齐翻译，QRC／KRC 等加密格式暂不解码。可选附件失败记录日志，允许音频完成入库。
 - 无 Content-Length 时按最高 64 MiB 预留，受配置上传上限及账户／全站预算限制，显示已下载字节，完成后收缩为实际大小。有效强 ETag 与 Content-Range 一致时续传，其余情况重建下载。
 - 本期只导入单个脚本链接，多音源订阅清单、自动更新与多源优先级后续开展。
+
+## O08 真实音源验收
+
+2026-11-15，使用用户提供的 [六音原始链接](https://raw.githubusercontent.com/pdone/lx-music-source/main/sixyin/latest.js) 和 [加速链接](https://gh-proxy.org/raw.githubusercontent.com/pdone/lx-music-source/main/sixyin/latest.js)。两个链接均可导入，取得同一份六音音源 v1.2.1，大小为 333,015 字节，SHA-256 为 `a407ffe0ab23c29cd32ce249b83e61c8e2b70719895f16034566ad7557282785`。测试结果对应这一脚本内容和当时上游状态。
+
+通过真实 Compose、主服务 API 和受控 HTTP broker 完成验证。所有第三方脚本在受限 worker 容器内执行，网络访问继续采用公网地址校验和短期能力令牌。搜索“小星星”时，酷我、酷狗、QQ、网易、咪咕均正常返回五条结果。
+
+| 平台与请求 | 测试样本 | 下载及入库结果 |
+| --- | --- | --- |
+| 网易 128k | 儿歌多多《小星星》 | 通过，MP3，128 kbps，1,188,719 字节 |
+| 网易 320k | 同上 | 通过，MP3，320 kbps，2,971,733 字节 |
+| 网易 FLAC | 同上 | 音频入库通过，实际为 MP3 320 kbps，已验证任务显示格式不符提示 |
+| QQ 128k | jaycd《贝多芬 欢乐颂》 | 通过，MP3，128 kbps，1,768,591 字节 |
+| QQ 128k | “小星星”首个候选 | 解析失败，更换“欢乐颂”候选后通过 |
+| 酷我／酷狗／咪咕 128k | “小星星”和“欢乐颂”所选候选 | 解析失败，未获得音频 |
+
+通过的任务均核对实际曲目格式、码率、非空文件及目标歌单成员关系。酷我上游返回 HTTP 403，酷狗和咪咕返回的正文无法作为音源预期的 JSON 使用。这些记录仅代表本次测试样本，后续可用性仍取决于音源与平台。网易 FLAC 样本未获得无损文件。
+
+### 验证中修复的兼容问题
+
+- 识别 `/*!` 脚本头，使 `lx.currentScriptInfo` 正确提供音源名称和版本。
+- 内部 Docker 主机名 `pikmelo` 的 broker 回调先验证临时能力令牌，业务管理路由继续执行原有 Host／Origin／会话规则。
+- HTTP 回调按 LX 行为尝试解析 JSON 文本，统一小写响应头并提供 `raw`、`bytes`，支持内容类型为 `text/plain` 的 JSON。
+- 下载任务保留请求音质，另行展示校验所得格式和码率。请求 FLAC 而实际格式不同时显示提示，重试清除上次结果后重新校验。
+
+对应回归均先复现失败再验证修复。最终 Go 在线业务、安全网络、Host／Origin 和实际 Node 回调专项通过，`music` 约 6.7 秒、`online` 约 0.9 秒，相关 vet 通过。worker 十一项 Node 用例、网页在线搜索及音质提示专项通过。重建主镜像后，真实网易 FLAC 样本再次通过并返回 `actual_format=mp3`、`actual_bitrate_kbps=320` 和明确提示。独立容器检查通过非 root、只读根、无业务挂载、无宿主端口、内部网络及资源限制。
+
+新增可选测试 `server/tests/online-source-live.py`，显式提供链接、平台、音质和镜像后运行，结果写入忽略目录，命令见 [Docker 使用说明](../../server/deploy/docker.md#在线搜索与音源-worker)。第三方脚本、凭据、音频和原始诊断未纳入 Git，测试项目及临时卷清理。本阶段本地验证完成，CI、镜像发行和正式 Release 待用户授权推送后执行。

@@ -8,7 +8,7 @@
 
 ## 通用功能与原生运行参考
 
-本地开发新增“在线搜索”，管理员可在该页“音源管理”导入单个 LX JavaScript 链接，成员可搜索已启用平台并下载入库，选择本人歌单。Docker Compose 增加隔离音源 worker，主服务与 worker 配套构建和更新，详见 [Docker 使用说明](deploy/docker.md#在线搜索与音源-worker)。实际第三方音源兼容性待提供链接后验证，当前开发内容尚未发布。
+本地开发新增“在线搜索”，管理员可在该页“音源管理”导入单个 LX JavaScript 链接，成员可搜索已启用平台并下载入库，选择本人歌单。Docker Compose 增加隔离音源 worker，主服务与 worker 配套构建和更新。六音 v1.2.1 已完成真实音源测试，网易和 QQ 的指定样本下载入库通过，酷我／酷狗／咪咕的测试样本解析失败。任务显示实际格式、码率和 FLAC 格式不符提示，当前开发内容尚未发布。测试范围见 [开发计划与验收记录](../Docs/服务器/在线搜索与LX音源导入开发计划.md)，配置见 [Docker 使用说明](deploy/docker.md#在线搜索与音源-worker)。
 
 Go 1.26+，本版 SQLite schema 9，HTTP API `/api/v2`，内置中文管理页。支持 Windows 和 Linux。正式版本以 Release 验收为依据。
 

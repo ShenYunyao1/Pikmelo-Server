@@ -29,7 +29,7 @@ function normalizeSources(data) {
 }
 
 function metadata(script) {
-  const header = script.match(/^\s*\/\*\*([\s\S]*?)\*\//)?.[1] || '';
+  const header = script.match(/^\s*\/\*[*!]?([\s\S]*?)\*\//)?.[1] || '';
   const result = {name:'Imported source',description:'',version:'',author:'',homepage:'',rawScript:script};
   for (const field of ['name','description','version','author','homepage']) {
     const value = header.match(new RegExp('@'+field+'[ \\t]+([^\\r\\n*]+)'))?.[1].trim();
@@ -84,11 +84,11 @@ function brokerRequest(url, options, callback) {
     if (!response.ok) throw new Error('HTTP broker rejected request');
     const reply=JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if (!Number.isInteger(reply.statusCode)) throw new Error('Invalid broker response');
+    reply.headers=Object.fromEntries(Object.entries(reply.headers || {}).map(([name,value])=>[name.toLowerCase(),value]));
+    reply.raw=checkedBuffer(typeof reply.body==='string'?reply.body:JSON.stringify(reply.body ?? ''));
+    reply.bytes=reply.raw.length;
     if (typeof reply.body === 'string') {
-      const contentType=Object.entries(reply.headers || {}).find(([key])=>key.toLowerCase()==='content-type')?.[1];
-      if (String(contentType).includes('json')) {
-        try { reply.body=JSON.parse(reply.body); } catch {}
-      }
+      try { reply.body=JSON.parse(reply.body); } catch {}
     }
     if (!cancelled) callback(null,reply,reply.body);
   }).catch(error=>{ if (!cancelled) callback(new Error(error.message),null,null); }).finally(()=>clearTimeout(timer));

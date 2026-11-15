@@ -129,6 +129,9 @@ func (o *onlineService) changeJob(auth authContext, actor MutationOptions, id, a
 			}
 			job.Status = "queued"
 			job.Error = ""
+			job.ActualFormat = ""
+			job.ActualBitrate = 0
+			job.Warning = ""
 		}
 		return saveOnlineValue(tx, onlineJobPrefix+id, job)
 	})
@@ -551,6 +554,14 @@ func (o *onlineService) finishJob(ctx context.Context, job onlineJob, auth authC
 			return err
 		}
 		current.StageID = preview.ID
+		current.ActualFormat = preview.Track.Format
+		current.ActualBitrate = preview.Track.BitrateKbps
+		current.Warning = ""
+		if strings.HasPrefix(current.Quality, "flac") && preview.Track.Format != "flac" {
+			current.Warning = "音源返回的实际格式为 " + strings.ToUpper(preview.Track.Format) + "，与请求的 FLAC 不一致。"
+		} else if current.Quality == "flac24bit" && preview.Track.BitsPerSample < 24 {
+			current.Warning = "音源返回的音频未确认为 24 位，请以曲目实际信息为准。"
+		}
 		if err := saveOnlineValue(tx, onlineJobPrefix+job.ID, current); err != nil {
 			return err
 		}

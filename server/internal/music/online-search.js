@@ -270,13 +270,18 @@ function renderOnlineJobs(jobs) {
   const labels={queued:'排队中',resolving:'解析地址',downloading:'下载中',validating:'校验与入库',completed:'已完成',failed:'失败',cancelled:'已取消'};
   for(const job of jobs){
     const row=onlineElement('article','online-job'),info=onlineElement('div','online-result-info');
-    info.append(onlineElement('strong','',job.title||'未命名曲目'),onlineElement('span','status',[onlinePlatformNames[job.platform]||job.platform,job.quality,labels[job.status]||job.status].filter(Boolean).join(' · ')));
+    info.append(onlineElement('strong','',job.title||'未命名曲目'),onlineElement('span','status',[onlinePlatformNames[job.platform]||job.platform,job.quality?'请求 '+job.quality:'',labels[job.status]||job.status].filter(Boolean).join(' · ')));
+    if(job.actual_format){
+      const actual=[String(job.actual_format).toUpperCase(),job.actual_bitrate_kbps>0?job.actual_bitrate_kbps+' kbps':''].filter(Boolean).join(' · ');
+      info.append(onlineElement('span','status','实际音频 '+actual));
+    }
     const progress=document.createElement('progress');progress.max=Number(job.total)||1;
     if(job.total>0)progress.value=Math.min(Number(job.downloaded)||0,progress.max);
     progress.setAttribute('aria-label','下载进度');
     const amount=onlineElement('span','status',onlineBytes(job.downloaded)+(job.total>0?' / '+onlineBytes(job.total):''));
     info.append(progress,amount);
     if(job.error)info.append(onlineElement('p','status error',job.error));
+    if(job.warning)info.append(onlineElement('p','status',job.warning));
     const actions=onlineElement('div','actions');
     const operation=['failed','cancelled'].includes(job.status)?'retry':!['completed'].includes(job.status)?'cancel':null;
     if(operation){

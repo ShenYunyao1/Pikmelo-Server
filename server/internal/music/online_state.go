@@ -49,6 +49,9 @@ type onlineJob struct {
 	Title            string          `json:"title"`
 	Platform         string          `json:"platform"`
 	Quality          string          `json:"quality"`
+	ActualFormat     string          `json:"actual_format,omitempty"`
+	ActualBitrate    int64           `json:"actual_bitrate_kbps,omitempty"`
+	Warning          string          `json:"warning,omitempty"`
 	Status           string          `json:"status"`
 	Downloaded       int64           `json:"downloaded"`
 	Total            int64           `json:"total"`
@@ -67,7 +70,8 @@ type onlineJob struct {
 
 func publicOnlineJob(job onlineJob) map[string]any {
 	return map[string]any{"id": job.ID, "title": job.Title, "platform": job.Platform, "quality": job.Quality, "status": job.Status,
-		"downloaded": job.Downloaded, "total": job.Total, "error": job.Error, "track_id": job.TrackID, "created_at": job.CreatedAt}
+		"downloaded": job.Downloaded, "total": job.Total, "error": job.Error, "track_id": job.TrackID, "created_at": job.CreatedAt,
+		"actual_format": job.ActualFormat, "actual_bitrate_kbps": job.ActualBitrate, "warning": job.Warning}
 }
 
 func readOnlineValue(reader sqlReader, key string, target any) error {
