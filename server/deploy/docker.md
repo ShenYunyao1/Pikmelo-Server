@@ -4,12 +4,13 @@
 
 ## 首次启动
 
-将 `server/compose.yaml` 和 `server/docker.env.example` 放入部署目录，按模板保存 `.env`。正式镜像地址为 `ghcr.io/shenyunyao1/pikmelo-server`，首个正式版本 [v0.21.19](https://github.com/ShenYunyao1/Pikmelo-Server/releases/tag/v0.21.19) 已通过 Actions、匿名拉取及来源证明验收，支持 Linux amd64、schema 9。
+将目标版本的 `server/compose.yaml` 和 `server/docker.env.example` 放入部署目录，按模板保存 `.env`。服务端镜像地址为 `ghcr.io/shenyunyao1/pikmelo-server`，音源 worker 为 `ghcr.io/shenyunyao1/pikmelo-server-online-worker`，支持 Linux amd64、schema 9。
 
-在 `.env` 设置 `PIKMELO_IMAGE=ghcr.io/shenyunyao1/pikmelo-server:0.21.19` 可固定该版本，默认 `latest` 跟随 Docker 稳定通道。需要固定不可变镜像时，填写以下完整引用。
+在 `.env` 同时固定两个镜像版本，默认 `latest` 跟随 Docker 稳定通道。需要固定不可变镜像时，使用对应 Release 的 `container-release.json` 中 `image` 和 `worker_image` 的完整摘要引用。
 
 ```text
-ghcr.io/shenyunyao1/pikmelo-server@sha256:4a3807a4c64162c0774619c7ce3feb2a360f57129a2a0911d15953f409b83eb8
+PIKMELO_IMAGE=ghcr.io/shenyunyao1/pikmelo-server:0.21.20
+PIKMELO_WORKER_IMAGE=ghcr.io/shenyunyao1/pikmelo-server-online-worker:0.21.20
 ```
 
 在 Compose 文件所在目录执行以下命令。
@@ -57,7 +58,7 @@ docker compose up -d --no-build --wait --wait-timeout 120 pikmelo
 
 新容器启动后由服务端执行已支持的数据库迁移，当前已验证 schema 8→9 的账户、Key、歌单及媒体保留。后续 schema 变化继续以发行说明与迁移测试声明的支持范围为准。升级前先停止旧实例并备份持久卷，跨 schema 回退时使用原镜像与升级前快照。
 
-以下示例采用默认卷名。自定义卷名时相应替换命令参数，`OLD_IMAGE_ID` 表示第一条命令查到的原镜像 ID。
+以下示例采用默认卷名。自定义卷名时相应替换命令参数，`OLD_IMAGE_ID` 和 `OLD_WORKER_IMAGE_ID` 分别表示查到的原主服务和 worker 镜像 ID。首次从 0.21.19 升级时尚无旧 worker，保留原 Compose 和 `.env`，回退时恢复这两份文件。
 
 升级窗口先暂停外部写入。完成健康及业务验收后，再开放访问。
 
@@ -72,6 +73,13 @@ docker run --rm --network none --mount type=volume,src=pikmelo-backups,dst=/back
 ```
 
 停机确认退出成功后执行快照，包含原库、媒体、邮件凭据和上传检查点。保留原镜像及快照到本次升级验收完成。多个升级窗口使用不同快照名称归档。
+
+已有 worker 的安装还需记录并保留其原镜像，供配套回退使用。
+
+```sh
+docker compose images -q online-worker
+docker image tag OLD_WORKER_IMAGE_ID pikmelo-online-worker:rollback-local
+```
 
 ### 2. 拉取并重建
 
@@ -98,7 +106,7 @@ docker volume create pikmelo-rollback-data
 docker run --rm --network none --user 0 --mount type=volume,src=pikmelo-rollback-data,dst=/restore --mount type=volume,src=pikmelo-backups,dst=/backup,readonly --entrypoint tar pikmelo-server:rollback-local -C /restore -xpf /backup/pre-upgrade.tar
 ```
 
-`pikmelo-rollback-data` 应为本次回退新建的空卷。随后将 `.env` 的 `PIKMELO_IMAGE` 设为 `pikmelo-server:rollback-local`、`PIKMELO_DATA_VOLUME` 设为 `pikmelo-rollback-data`，并保持原数据库与媒体路径配置，执行以下命令。
+`pikmelo-rollback-data` 应为本次回退新建的空卷。随后将 `.env` 的 `PIKMELO_IMAGE` 设为 `pikmelo-server:rollback-local`、`PIKMELO_WORKER_IMAGE` 设为 `pikmelo-online-worker:rollback-local`、`PIKMELO_DATA_VOLUME` 设为 `pikmelo-rollback-data`，并保持原数据库与媒体路径配置，执行以下命令。回退到 0.21.19 时恢复旧 Compose／`.env` 并改用恢复卷。
 
 ```sh
 docker compose up -d --no-build --wait --wait-timeout 120 pikmelo
@@ -123,7 +131,7 @@ docker run --rm --network none --mount type=volume,src=pikmelo-import-data,dst=/
 
 ### 在线搜索与音源 worker
 
-当前开发版增加 `online-worker` 服务。该 worker 镜像随下一次正式发行发布，v0.21.19 的历史发行保持原样。本地源码验证先执行 `docker compose build pikmelo online-worker`，再启动 Compose。正式更新从对应源码取得新版 Compose 及配置模板，配套拉取两个镜像。
+0.21.20 增加 `online-worker` 服务，主服务镜像为 `ghcr.io/shenyunyao1/pikmelo-server:0.21.20`，配套 worker 为 `ghcr.io/shenyunyao1/pikmelo-server-online-worker:0.21.20`。本地源码验证先执行 `docker compose build pikmelo online-worker`，再启动 Compose。正式更新从对应版本取得新版 Compose 及配置模板，保留本机 `.env` 和原数据卷名，在 `.env` 同时设置 `PIKMELO_IMAGE`、`PIKMELO_WORKER_IMAGE` 的目标版本，按升级章节停机备份后配套拉取并重建两个服务。
 
 worker 仅连接 `internal` Docker 网络，不发布宿主端口、不挂载数据库或媒体。主服务连接该内部网络及普通出站网络，脚本通过短期授权 broker 访问公网 HTTP(S)，逐次检查 DNS、重定向及流量预算。主服务继续负责下载、配额、校验及入库。
 

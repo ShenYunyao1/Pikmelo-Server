@@ -91,3 +91,9 @@
 对应回归均先复现失败再验证修复。最终 Go 在线业务、安全网络、Host／Origin 和实际 Node 回调专项通过，`music` 约 6.7 秒、`online` 约 0.9 秒，相关 vet 通过。worker 十一项 Node 用例、网页在线搜索及音质提示专项通过。重建主镜像后，真实网易 FLAC 样本再次通过并返回 `actual_format=mp3`、`actual_bitrate_kbps=320` 和明确提示。独立容器检查通过非 root、只读根、无业务挂载、无宿主端口、内部网络及资源限制。
 
 新增可选测试 `server/tests/online-source-live.py`，显式提供链接、平台、音质和镜像后运行，结果写入忽略目录，命令见 [Docker 使用说明](../../server/deploy/docker.md#在线搜索与音源-worker)。第三方脚本、凭据、音频和原始诊断未纳入 Git，测试项目及临时卷清理。本阶段本地验证完成，CI、镜像发行和正式 Release 待用户授权推送后执行。
+
+## Docker 发行进度
+
+2026-11-15，用户明确要求 Docker 发行，准备版本 0.21.20，schema 9。主服务与音源 worker 采用同一源码提交和版本标签，工作流分别发布 GHCR 镜像及来源证明，`container-release.json` 包含两个不可变摘要。版本说明已记录真实音源的部分平台失败及 FLAC 格式不符情况，升级说明要求取得新版 Compose、保留数据卷并停机备份。
+
+- [ ] O09 标签 Actions 全部门禁、双镜像正式发布及独立身份／来源证明／实际容器验收通过。

@@ -1,14 +1,14 @@
-# Pikmelo Server · 拾律服务器 0.21.19
+# Pikmelo Server · 拾律服务器 0.21.20
 
-## Docker 分支入口
+## Docker 运行与发行
 
-`codex/docker-compose` 分支提供容器化与 Docker 命令升级。运行、数据卷、备份和回退步骤见 [Docker 使用说明](deploy/docker.md)，实施与验收见 [容器化计划](../Docs/服务器/Docker容器化与命令行升级计划.md)。本分支的发行对象为 GHCR 镜像及 `container-release.json`，完整容器验收通过后由版本标签触发正式发布。
+服务端统一在 `main` 维护，采用容器化与 Docker 命令升级。运行、数据卷、备份和回退步骤见 [Docker 使用说明](deploy/docker.md)，实施与验收见 [容器化计划](../Docs/服务器/Docker容器化与命令行升级计划.md)。发行对象为 GHCR 镜像及 `container-release.json`，完整容器验收通过后由版本标签触发正式发布。
 
 以下章节同时保留通用 API、功能及早期原生运行记录。
 
 ## 通用功能与原生运行参考
 
-本地开发新增“在线搜索”，管理员可在该页“音源管理”导入单个 LX JavaScript 链接，成员可搜索已启用平台并下载入库，选择本人歌单。Docker Compose 增加隔离音源 worker，主服务与 worker 配套构建和更新。六音 v1.2.1 已完成真实音源测试，网易和 QQ 的指定样本下载入库通过，酷我／酷狗／咪咕的测试样本解析失败。任务显示实际格式、码率和 FLAC 格式不符提示，当前开发内容尚未发布。测试范围见 [开发计划与验收记录](../Docs/服务器/在线搜索与LX音源导入开发计划.md)，配置见 [Docker 使用说明](deploy/docker.md#在线搜索与音源-worker)。
+本版新增“在线搜索”，管理员可在该页“音源管理”导入单个 LX JavaScript 链接，成员可搜索已启用平台并下载入库，选择本人歌单。Docker Compose 增加隔离音源 worker，主服务与 worker 配套构建和更新。六音 v1.2.1 已完成真实音源测试，网易和 QQ 的指定样本下载入库通过，酷我／酷狗／咪咕的测试样本解析失败。任务显示实际格式、码率和 FLAC 格式不符提示。测试范围见 [开发计划与验收记录](../Docs/服务器/在线搜索与LX音源导入开发计划.md)，配置见 [Docker 使用说明](deploy/docker.md#在线搜索与音源-worker)。
 
 Go 1.26+，本版 SQLite schema 9，HTTP API `/api/v2`，内置中文管理页。支持 Windows 和 Linux。正式版本以 Release 验收为依据。
 
