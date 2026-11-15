@@ -311,13 +311,21 @@ function appendOnlineQualityTable(host,item) {
   host.append(wrap);
 }
 function onlineDialog(title) {
-  onlineSearchState.dialog?.close();
+  const previous = onlineSearchState.dialog;
+  previous?.close();
+  previous?.remove();
   const dialog = document.createElement('dialog'); dialog.className = 'online-dialog';
   const heading = onlineElement('h2','',title), body = onlineElement('div','online-dialog-body'), footer = onlineElement('div','actions');
   const close = makeButton('关闭',()=>dialog.close());footer.append(close);
   dialog.append(heading,body,footer);document.body.append(dialog);
   dialog.addEventListener('click',event=>{if(event.target===dialog){const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)dialog.close()}});
-  dialog.addEventListener('close',()=>{onlineSearchState.targetGeneration++;dialog.remove();if(onlineSearchState.dialog===dialog)onlineSearchState.dialog=null},{once:true});
+  dialog.addEventListener('close', () => {
+    dialog.remove();
+    if (onlineSearchState.dialog === dialog) {
+      onlineSearchState.targetGeneration++;
+      onlineSearchState.dialog = null;
+    }
+  }, {once:true});
   onlineSearchState.dialog = dialog;dialog.showModal();
   return {dialog,body,footer};
 }

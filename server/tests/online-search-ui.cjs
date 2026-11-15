@@ -46,6 +46,20 @@ async function fixture(browser) {
   try {
     const page=await fixture(browser), errors=[];
     page.on('pageerror',error=>errors.push(error.message));
+    const replacement = await page.evaluate(() => {
+      openOnlineDetails(item);
+      const previous = onlineSearchState.dialog;
+      previous.close();
+      openOnlineImport(item, '128k');
+      const generation = onlineSearchState.targetGeneration;
+      const count = document.querySelectorAll('dialog.online-dialog').length;
+      previous.dispatchEvent(new Event('close'));
+      return {count, generationRetained: generation === onlineSearchState.targetGeneration};
+    });
+    assert.equal(replacement.count, 1, 'Replacing a dialog must immediately detach the previous dialog');
+    assert.equal(replacement.generationRetained, true, 'A delayed close event must preserve the replacement dialog request');
+    await page.waitForFunction(()=>$('onlineImportPlaylist').options.length===2);
+    await page.locator('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     assert.equal(await page.locator('#onlineSearchButton').isEnabled(),true);
     await page.fill('#onlineQuery','test');await page.click('#onlineSearchButton');
     await page.locator('.online-result').waitFor();
