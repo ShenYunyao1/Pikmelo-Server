@@ -96,4 +96,21 @@
 
 2026-11-15，用户明确要求 Docker 发行，准备版本 0.21.20，schema 9。主服务与音源 worker 采用同一源码提交和版本标签，工作流分别发布 GHCR 镜像及来源证明，`container-release.json` 包含两个不可变摘要。版本说明已记录真实音源的部分平台失败及 FLAC 格式不符情况，升级说明要求取得新版 Compose、保留数据卷并停机备份。
 
-- [ ] O09 标签 Actions 全部门禁、双镜像正式发布及独立身份／来源证明／实际容器验收通过。
+- [x] O09 标签 Actions 全部门禁、双镜像正式发布及独立身份／来源证明／实际容器验收通过。
+
+### 0.21.20 正式发行验收
+
+2026-11-15，已发布 [v0.21.20 Docker Release](https://github.com/ShenYunyao1/Pikmelo-Server/releases/tag/v0.21.20)，源码为 `8aac5b3159d16d9dd8b799a345221a4cefc2f9d6`，schema 9，Linux amd64。[标签 Actions 43664985844](https://github.com/ShenYunyao1/Pikmelo-Server/actions/runs/43664985844) 和 [main Actions 43664986620](https://github.com/ShenYunyao1/Pikmelo-Server/actions/runs/43664986620) 均为十项作业全部成功，包含三平台 Go／vet、Linux race／安装、六组网页和实际容器升级回退。
+
+正式镜像的版本标签 `0.21.20` 与各自 `latest` 摘要一致，匿名 Registry 读取和空 Docker 凭据配置的实际拉取均通过。
+
+```text
+ghcr.io/shenyunyao1/pikmelo-server@sha256:393bf8736e38f94d65746f8d0e428cfdbdca1fb7ae165d279f64363093497c2b
+ghcr.io/shenyunyao1/pikmelo-server-online-worker@sha256:dedd01d1669220ada61a01ed4d95742b44c0c67fa4394dfcb6295fed74a8062d
+```
+
+独立下载核验唯一资产 `container-release.json`，425 字节，SHA-256 为 `b44b5c4342ae6b7d968978e3d7f9924d7f7416bfd0f718af64ce19a2b81a2457`，与 GitHub 资产摘要一致。清单版本、schema、提交、双镜像身份与实际 Registry 配置一致。两个来源证明通过 `gh attestation verify`，要求固定仓库、`refs/tags/v0.21.20`、上述源码／签名工作流提交、准确 `server-release.yml` 证书身份及 GitHub 托管 runner。
+
+直接使用正式摘要镜像再次通过真实 Chromium、初始化和上传、非 root／只读根、网页 Docker 提示、重建持久化、实际 LX 初始化、schema 8→9、故意失败健康门禁、旧镜像与快照恢复 8、完整备份导入、自定义数据路径及原 Key 媒体读取。worker 独立边界测试再次通过。随机容器、网络和卷清理，验收产物位于已忽略的 `server/build/release-verify-0.21.20/`。
+
+Docker 稳定通道已推进到 0.21.20，原生 GitHub latest 仍为 v0.21.18。本期交付为源码、Actions、双镜像与 Release 验收，实际运行实例由用户按 Docker 使用说明更新。
